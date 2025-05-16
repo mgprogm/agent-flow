@@ -25,9 +25,10 @@ interface ToolsWindowProps {
   onClose: () => void;
   onConnect: (toolName: string, actions: Action[]) => void;
   onSelectTool: (items: Action[]) => void;
+  composioApiKey: string;
 }
 
-const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectTool }) => {
+const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectTool, composioApiKey }) => {
   const [tools, setTools] = useState<Tool[]>([]);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
@@ -44,48 +45,72 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
   const [connectionStatus, setConnectionStatus] = useState<{[slug: string]: 'idle' | 'connecting' | 'waiting' | 'connected' | 'failed'}>({});
   const [lastConnectionId, setLastConnectionId] = useState<string | null>(null);
   const [selectedActionNames, setSelectedActionNames] = useState<string[]>([]);
+  const lastCheckedRef = React.useRef<{toolSlug: string, apiKey: string} | null>(null);
+  const [isAlreadyConnected, setIsAlreadyConnected] = useState(false);
 
   const stopClipboardPropagation = (event: React.ClipboardEvent) => {
     event.stopPropagation();
   };
 
   useEffect(() => {
+    // Only fetch tools once on mount
+    let didCancel = false;
     const fetchTools = async () => {
       setLoadingTools(true);
       try {
         const response = await fetch('/api/composio-tools');
         const data = await response.json();
-        setTools(data.tools || []);
+        if (!didCancel) setTools(data.tools || []);
       } catch (error) {
-        setTools([]);
+        if (!didCancel) setTools([]);
       } finally {
-        setLoadingTools(false);
+        if (!didCancel) setLoadingTools(false);
       }
     };
     fetchTools();
+    return () => { didCancel = true; };
   }, []);
 
   useEffect(() => {
-    if (!selectedTool) {
+    if (!selectedTool || !composioApiKey) {
       setActions([]);
       return;
     }
-    console.log('[ToolsWindow] Selected tool slug:', selectedTool.slug);
     setLoadingActions(true);
-    const fetchUrl = `/api/composio-tools/actions?toolkitSlug=${selectedTool.slug}`;
-    console.log('[ToolsWindow] Fetching actions from:', fetchUrl);
+    const fetchUrl = `/api/composio-tools/actions?toolkitSlug=${selectedTool.slug}&composioApiKey=${encodeURIComponent(composioApiKey)}`;
     fetch(fetchUrl)
       .then(res => res.json())
       .then(data => {
-        console.log('[ToolsWindow] Actions API response:', data);
         setActions(data.actions || []);
       })
-      .catch(err => {
-        console.error('[ToolsWindow] Error fetching actions:', err);
+      .catch(() => {
         setActions([]);
       })
       .finally(() => setLoadingActions(false));
-  }, [selectedTool]);
+  }, [selectedTool, composioApiKey]);
+
+  const handleToolClick = (tool: Tool) => {
+    setSelectedTool(tool);
+    if (composioApiKey) {
+      setIsAlreadyConnected(false);
+      setConnectionStatus(prev => ({ ...prev, [tool.slug]: 'idle' }));
+      fetch(`/api/connection/wait?toolkitSlug=${tool.slug}&composioApiKey=${encodeURIComponent(composioApiKey)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'connected' || data.status === 'ACTIVE') {
+            setIsAlreadyConnected(true);
+            setConnectionStatus(prev => ({ ...prev, [tool.slug]: 'connected' }));
+          } else {
+            setIsAlreadyConnected(false);
+            setConnectionStatus(prev => ({ ...prev, [tool.slug]: 'idle' }));
+          }
+        })
+        .catch(() => {
+          setIsAlreadyConnected(false);
+          setConnectionStatus(prev => ({ ...prev, [tool.slug]: 'idle' }));
+        });
+    }
+  };
 
   const filteredTools = tools.filter(tool =>
     tool.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -125,7 +150,7 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
       const response = await fetch('/api/connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toolkitSlug: selectedTool.slug }),
+        body: JSON.stringify({ toolkitSlug: selectedTool.slug, composioApiKey }),
       });
       const data = await response.json();
 
@@ -175,7 +200,7 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
     setConnectingTool(true);
     setAuthError(null);
     try {
-      const waitRes = await fetch(`/api/connection/wait?connectionId=${lastConnectionId}`);
+      const waitRes = await fetch(`/api/connection/wait?connectionId=${lastConnectionId}&composioApiKey=${encodeURIComponent(composioApiKey)}`);
       const waitData = await waitRes.json();
       if (waitRes.ok && waitData.status === 'connected') {
         setConnectionStatus(prev => ({ ...prev, [selectedTool.slug]: 'connected' }));
@@ -195,7 +220,7 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
     if (!selectedTool || !authModalType) return;
     setConnectingTool(true);
     setAuthError(null);
-    let body: any = { toolkitSlug: selectedTool.slug };
+    let body: any = { toolkitSlug: selectedTool.slug, composioApiKey };
     if (authModalType === 'api_key') {
       body.apiKey = apiKey;
     } else if (authModalType === 'client_credentials') {
@@ -271,6 +296,28 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
     }
   };
 
+  // Manual reload for connection status
+  const handleManualReload = async () => {
+    if (!selectedTool || !composioApiKey) return;
+    setConnectingTool(true);
+    try {
+      const res = await fetch(`/api/connection/wait?toolkitSlug=${selectedTool.slug}&composioApiKey=${encodeURIComponent(composioApiKey)}`);
+      const data = await res.json();
+      if (data.status === 'connected' || data.status === 'ACTIVE') {
+        setIsAlreadyConnected(true);
+        setConnectionStatus(prev => ({ ...prev, [selectedTool.slug]: 'connected' }));
+      } else {
+        setIsAlreadyConnected(false);
+        setConnectionStatus(prev => ({ ...prev, [selectedTool.slug]: 'idle' }));
+      }
+    } catch {
+      setIsAlreadyConnected(false);
+      setConnectionStatus(prev => ({ ...prev, [selectedTool.slug]: 'idle' }));
+    } finally {
+      setConnectingTool(false);
+    }
+  };
+
   return (
     <div 
       className="fixed inset-0 z-[1000] flex items-center justify-center"
@@ -295,7 +342,7 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
             ) : filteredTools.map(tool => (
               <div
                 key={tool.slug}
-                onClick={() => setSelectedTool(tool)}
+                onClick={() => handleToolClick(tool)}
                 className={`p-4 rounded-xl cursor-pointer transition-all duration-200 mb-2 border border-[rgba(255,245,245,0.08)] bg-[rgba(30,30,30,0.4)] hover:bg-[rgba(30,30,30,0.6)] hover:border-[rgba(255,245,245,0.18)] backdrop-blur-md ${selectedTool?.slug === tool.slug ? 'bg-[rgba(0,0,0,0.7)] border-[rgba(255,245,245,0.18)] shadow-lg' : ''}`}
               >
                 <div className="flex items-center gap-3">
@@ -307,15 +354,6 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
                     </div>
                   )}
                   <div className="text-[#fff5f5] font-medium text-lg truncate max-w-[180px]">{tool.name}</div>
-                  <button
-                    className="ml-auto px-3 py-1 rounded bg-cyan-700 text-white text-xs hover:bg-cyan-800"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onSelectTool(actions);
-                    }}
-                  >
-                    Select
-                  </button>
                 </div>
                 {(tool.meta?.description || tool.description) && (
                   <div className="text-[#fff5f5]/70 text-sm leading-relaxed mt-1 line-clamp-2 max-w-full break-words">
@@ -357,35 +395,38 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleConnectClick}
-                      className={`ml-2 px-6 py-3 rounded-lg border font-medium transition-all duration-200 shadow-md backdrop-blur-md whitespace-nowrap
-                        ${connectionStatus[selectedTool?.slug] === 'connected' ? 'bg-green-600 border-green-700 text-white' : ''}
-                        ${connectionStatus[selectedTool?.slug] === 'failed' ? 'bg-red-600 border-red-700 text-white' : ''}
-                        ${connectionStatus[selectedTool?.slug] === 'waiting' ? 'bg-yellow-600 border-yellow-700 text-white' : ''}
-                        ${connectionStatus[selectedTool?.slug] === 'idle' || connectionStatus[selectedTool?.slug] === 'connecting' ? 'bg-[rgba(255,245,245,0.05)] border-[rgba(255,245,245,0.2)] text-[#fff5f5]' : ''}`}
-                      disabled={loadingActions || connectingTool || connectionStatus[selectedTool?.slug] === 'connected'}
-                    >
-                      {connectionStatus[selectedTool?.slug] === 'connected'
-                        ? 'Connected'
-                        : connectionStatus[selectedTool?.slug] === 'failed'
-                          ? 'Failed'
-                          : connectionStatus[selectedTool?.slug] === 'waiting'
-                            ? 'Waiting... (click reload to check)'
-                            : connectingTool
-                              ? 'Connecting...'
-                              : (loadingActions ? 'Loading Actions...' : 'Connect')}
-                    </button>
-                    {connectionStatus[selectedTool?.slug] === 'waiting' && lastConnectionId && (
+                    <div className="flex items-center gap-2">
+                      {isAlreadyConnected ? (
+                        <div className="px-6 py-3 rounded-lg border font-medium bg-green-600 border-green-700 text-white shadow-md backdrop-blur-md whitespace-nowrap flex items-center justify-center">
+                          Connected
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleConnectClick}
+                          className={`px-6 py-3 rounded-lg border font-medium transition-all duration-200 shadow-md backdrop-blur-md whitespace-nowrap
+                            ${connectionStatus[selectedTool?.slug] === 'failed' ? 'bg-red-600 border-red-700 text-white' : ''}
+                            ${connectionStatus[selectedTool?.slug] === 'waiting' ? 'bg-yellow-600 border-yellow-700 text-white' : ''}
+                            ${connectionStatus[selectedTool?.slug] === 'idle' || connectionStatus[selectedTool?.slug] === 'connecting' ? 'bg-[rgba(255,245,245,0.05)] border-[rgba(255,245,245,0.2)] text-[#fff5f5]' : ''}`}
+                          disabled={loadingActions || connectingTool}
+                        >
+                          {connectionStatus[selectedTool?.slug] === 'failed'
+                            ? 'Failed'
+                            : connectionStatus[selectedTool?.slug] === 'waiting'
+                              ? 'Waiting... (click reload to check)'
+                              : connectingTool
+                                ? 'Connecting...'
+                                : (loadingActions ? 'Loading Actions...' : 'Connect')}
+                        </button>
+                      )}
                       <button
-                        onClick={handleReloadStatus}
+                        onClick={handleManualReload}
                         className="p-2 rounded-lg border border-[rgba(255,245,245,0.2)] bg-[rgba(255,245,245,0.08)] text-[#fff5f5] hover:bg-[rgba(255,245,245,0.15)] transition-all duration-200"
                         disabled={connectingTool}
                         title="Reload connection status"
                       >
                         <RefreshCw size={18} />
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -402,11 +443,11 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
                   </button>
                 </div>
                 {selectedActionNames.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-4 w-full">
                     {selectedActionNames.map(name => (
                       <span
                         key={name}
-                        className="flex items-center gap-1 px-3 py-1 bg-cyan-900/40 border border-cyan-400 text-cyan-100 rounded-full text-xs cursor-pointer hover:bg-cyan-800"
+                        className="flex items-center gap-1 px-3 py-1 bg-cyan-900/40 border border-cyan-400 text-cyan-100 rounded-full text-xs cursor-pointer hover:bg-cyan-800 whitespace-pre-line max-w-xs break-all"
                         onClick={() => setSelectedActionNames(prev => prev.filter(a => a !== name))}
                       >
                         {name}

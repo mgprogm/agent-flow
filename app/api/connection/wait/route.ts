@@ -5,10 +5,8 @@ import { Composio } from '@composio/core';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const connectionId = searchParams.get('connectionId');
+  const toolkitSlug = searchParams.get('toolkitSlug');
   const composioApiKey = searchParams.get('composioApiKey');
-  if (!connectionId) {
-    return NextResponse.json({ error: 'connectionId is required' }, { status: 400 });
-  }
   if (!composioApiKey) {
     return NextResponse.json({ error: 'composioApiKey is required' }, { status: 400 });
   }
@@ -17,13 +15,28 @@ export async function GET(req: NextRequest) {
     toolset: new LangchainToolset(),
   });
   try {
-    const account = await composio.connectedAccounts.get(connectionId);
-    if (account && account.status === 'ACTIVE') {
-      return NextResponse.json({ status: 'connected' });
+    if (toolkitSlug) {
+      // List all connections for this toolkit
+      const connections = await composio.connectedAccounts.list({ toolkit_slug: toolkitSlug });
+      console.log(connections)
+      const items = Array.isArray(connections.items) ? connections.items : [];
+      const active = items.find(
+        (acc: any) => acc.status === 'ACTIVE' && acc.toolkit?.slug === toolkitSlug
+      );
+      if (active) {
+        return NextResponse.json({ status: 'connected' });
+      }
+      return NextResponse.json({ status: 'not_connected' });
+    } else if (connectionId) {
+      const account = await composio.connectedAccounts.get(connectionId);
+      if (account && account.status === 'ACTIVE') {
+        return NextResponse.json({ status: 'connected' });
+      }
+      return NextResponse.json({ status: account?.status || 'not_connected' });
     } else {
-      return NextResponse.json({ status: 'waiting', rawStatus: account?.status });
+      return NextResponse.json({ error: 'toolkitSlug or connectionId is required' }, { status: 400 });
     }
-  } catch (err) {
-    return NextResponse.json({ status: 'error', error: 'Failed to fetch connection status' }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Failed to check connection status' }, { status: 500 });
   }
 } 

@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: `Composio API error: ${errorText}` }, { status: apiRes.status });
     }
     const apiData = await apiRes.json();
-    // The API returns { items: [...] }
     return NextResponse.json({ actions: apiData.items || [] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

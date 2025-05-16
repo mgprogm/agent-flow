@@ -852,28 +852,37 @@ const allSidebarItems = [
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodes, clipboardNodes]);
 
-  // Add handler to select tool for agent node
-  type ToolType = { name: string };
-  const handleSelectTool = (tool: ToolType) => {
+  // Handler for ToolsWindow to add actions to the selected node
+  const handleAddActionsToAgent = (actions: any[]) => {
     if (!selectedNodes || selectedNodes.length === 0) return;
-    const agentNode = selectedNodes.find((n: Node) => n.type === 'agent');
-    if (!agentNode) return;
-    setNodes(nds => nds.map((node: Node) => {
-      if (node.id === agentNode.id) {
-        const prevAllowed = (node.data.allowedTools || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-        if (!prevAllowed.includes(tool.name)) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              allowedTools: prevAllowed.concat(tool.name).join(',')
-            }
-          };
-        }
+    const node = selectedNodes.find((n: Node) => n.type === 'agent' || n.type === 'composio');
+    if (!node) return;
+    // Compose action keys as comma-separated string
+    const actionKeys = actions.map(a => a.name).join(',');
+    setNodes(nds => nds.map((n: Node) => {
+      if (n.id === node.id) {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            allowedTools: actionKeys,
+            toolActions: actionKeys,
+          }
+        };
       }
-      return node;
+      return n;
     }));
     setToolsWindowOpen(false);
+  };
+
+  // Helper to get composioApiKey from selected node
+  const getSelectedComposioApiKey = () => {
+    if (!selectedNodes || selectedNodes.length === 0) return '';
+    const node = selectedNodes.find((n: Node) => n.type === 'agent' || n.type === 'composio');
+    if (!node) return '';
+    if (node.type === 'agent') return node.data.composioApiKey || '';
+    if (node.type === 'composio') return node.data.composioApiKey || '';
+    return '';
   };
 
   if (backLoading) {
@@ -1143,7 +1152,8 @@ const allSidebarItems = [
             <ToolsWindow 
               onClose={() => setToolsWindowOpen(false)} 
               onConnect={() => setToolsWindowOpen(false)} 
-              onSelectTool={handleSelectTool}
+              onSelectTool={handleAddActionsToAgent}
+              composioApiKey={getSelectedComposioApiKey()}
             />
           )}
           {/* Play Button at bottom center */}

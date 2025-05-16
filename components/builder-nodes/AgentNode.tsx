@@ -32,31 +32,7 @@ interface AgentNodeProps extends NodeProps<AgentNodeData> {
 
 const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow }) => {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [availableActions, setAvailableActions] = useState<{[key: string]: string[]}>({});
   const selectedActionsList = (data.allowedTools || '').split(',').map(t => t.trim()).filter(Boolean);
-
-  // Fetch available actions for connected tools
-  useEffect(() => {
-    const fetchToolActions = async () => {
-      try {
-        const response = await fetch('/api/composio-tools');
-        const data = await response.json();
-        const tools = data.tools || [];
-        const actions: {[key: string]: string[]} = {};
-        tools.forEach((tool: { name: string, actions: string[] }) => {
-          if (selectedActionsList.includes(tool.name)) {
-            actions[tool.name] = tool.actions;
-          }
-        });
-        setAvailableActions(actions);
-      } catch (error) {
-        console.error('Failed to fetch tool actions:', error);
-      }
-    };
-    if (selectedActionsList.length > 0) {
-      fetchToolActions();
-    }
-  }, [selectedActionsList]);
 
   const handleNodeConfigChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
@@ -212,9 +188,12 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
           <div>
             <span style={{ ...labelStyle, fontSize: '0.8rem', color: 'rgba(180, 245, 245, 0.9)', marginBottom: '0.3rem' }}>Tool Config</span>
             <div style={{ marginBottom: '0.5rem' }}>
-              <div className="mb-2 bg-red-600/90 text-white text-xs font-semibold rounded px-2 py-1 text-center">
-                You must provide a Composio API key to use tools.
-              </div>
+              {!data.composioApiKey && (
+                <div className="mb-3 flex items-center gap-2 bg-gradient-to-r from-red-500 via-red-600 to-pink-500 text-white rounded-lg px-4 py-2 shadow-lg border border-red-300/40 animate-fade-in">
+                  <svg className="w-5 h-5 text-white/90" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" /></svg>
+                  <span className="font-medium text-sm">You must provide a <span className="underline">Composio API key</span> to use tools.</span>
+                </div>
+              )}
               <label htmlFor={`composioApiKey-${id}`} style={labelStyle}>Composio API Key</label>
               <input
                 id={`composioApiKey-${id}`}
@@ -267,29 +246,6 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
                   >
                     + Add Tool
                   </div>
-                  {Object.entries(availableActions).map(([toolName, actions]) => (
-                    <div key={toolName}>
-                      <div className="px-3 py-1.5 text-xs text-[#cbfcfc99] bg-[#cbfcfc0a]">
-                        {toolName}
-                      </div>
-                      {Array.isArray(actions) && actions.map(action => (
-                        <div
-                          key={action}
-                          className="px-3 py-2 cursor-pointer hover:bg-[#cbfcfc22] text-[#cbfcfc]"
-                          onClick={() => {
-                            const actionKey = `${toolName}.${action}`;
-                            if (!selectedActionsList.includes(actionKey)) {
-                              const updated = [...selectedActionsList, actionKey];
-                              if (data.onNodeDataChange) data.onNodeDataChange(id, { allowedTools: updated.join(',') });
-                            }
-                            setShowDropdown(false);
-                          }}
-                        >
-                          {action}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
                 </div>
               )}
             </div>
