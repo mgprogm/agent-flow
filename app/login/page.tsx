@@ -50,12 +50,11 @@ export default function LoginPage() {
     setLoading(null)
   }
 
-  async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleResetPassword() {
     setLoading('reset');
     setMessage("");
     const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: 'https://agent-flow-sigma.vercel.app' });
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: 'https://agent-flow-sigma.vercel.app/reset-password' });
     if (error) setMessage(error.message);
     else setMessage("Check your email for a password reset link.");
     setLoading(null);
@@ -102,20 +101,11 @@ export default function LoginPage() {
                   Forgot password?
                 </button>
               </DialogTrigger>
-              <DialogContent className="max-w-xs w-full bg-white/10 border border-white/20 rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-3 backdrop-blur-xl relative">
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); (document.activeElement as HTMLElement)?.blur(); }}
-                  className="absolute top-3 right-3 text-zinc-300 hover:text-white text-lg focus:outline-none"
-                  aria-label="Close"
-                  data-close-dialog
-                >
-                  ×
-                </button>
+              <DialogContent className="max-w-xs w-full bg-white/10 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-xl">
                 <DialogHeader className="w-full text-center mb-2">
                   <DialogTitle className="text-lg font-semibold text-white">Reset Password</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleResetPassword} className="w-full flex flex-col gap-3 mt-1">
+                <div className="w-full flex flex-col gap-3 mt-1">
                   <input
                     type="email"
                     value={resetEmail}
@@ -126,14 +116,15 @@ export default function LoginPage() {
                   />
                   <DialogFooter className="w-full">
                     <button
-                      type="submit"
+                      type="button"
                       className="w-full bg-primary text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-primary/90 transition text-sm"
                       disabled={loading === 'reset'}
+                      onClick={handleResetPassword}
                     >
                       {loading === 'reset' ? 'Sending...' : 'Send Reset Link'}
                     </button>
                   </DialogFooter>
-                </form>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
