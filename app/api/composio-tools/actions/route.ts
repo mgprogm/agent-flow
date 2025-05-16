@@ -1,31 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const toolkitSlug = searchParams.get('toolkitSlug');
+  const composioApiKey = searchParams.get('composioApiKey');
 
   if (!toolkitSlug) {
     return NextResponse.json({ error: 'Missing toolkitSlug parameter' }, { status: 400 });
   }
+  if (!composioApiKey) {
+    return NextResponse.json({ error: 'Missing composioApiKey parameter' }, { status: 400 });
+  }
 
   try {
-    const filePath = path.join(process.cwd(), 'app/api/composio-tools/actions.json');
-    const file = await fs.readFile(filePath, 'utf-8');
-    const actionsResponse = JSON.parse(file);
-
-    if (!actionsResponse || !Array.isArray(actionsResponse.items)) {
-      return NextResponse.json({ error: 'Invalid actions file format' }, { status: 500 });
+    const apiUrl = `https://backend.composio.dev/api/v3/tools?toolkit_slug=${encodeURIComponent(toolkitSlug)}`;
+    const apiRes = await fetch(apiUrl, {
+      headers: {
+        'x-api-key': composioApiKey,
+      },
+    });
+    if (!apiRes.ok) {
+      const errorText = await apiRes.text();
+      return NextResponse.json({ error: `Composio API error: ${errorText}` }, { status: apiRes.status });
     }
-
-    const filteredActions = actionsResponse.items.filter((action: any) =>
-      action.appId === toolkitSlug ||
-      action.appKey === toolkitSlug ||
-      action.appName === toolkitSlug
-    );
-
-    return NextResponse.json({ actions: filteredActions });
+    const apiData = await apiRes.json();
+    // The API returns { items: [...] }
+    return NextResponse.json({ actions: apiData.items || [] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
