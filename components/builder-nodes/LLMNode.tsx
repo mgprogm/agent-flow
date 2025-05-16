@@ -1,0 +1,196 @@
+"use client";
+import React, { memo, ChangeEvent } from 'react';
+import { Handle, Position, NodeProps } from 'reactflow';
+
+export interface LLMNodeData {
+  label?: string;
+  systemPrompt?: string;
+  apiKey?: string;
+  modelProvider?: 'openai' | 'anthropic' | 'google';
+  modelName?: string;
+  onNodeDataChange?: (id: string, data: Partial<Omit<LLMNodeData, 'onNodeDataChange'>>) => void;
+  width?: number;
+}
+
+const modelOptions = {
+  openai: ['gpt-4o', 'gpt-4.1', 'o3-mini'],
+  anthropic: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+  google: ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-1.0-pro'],
+};
+
+const LLMNode: React.FC<NodeProps<LLMNodeData>> = ({ id, data, isConnectable }) => {
+  const { 
+    label = 'LLM Node', 
+    systemPrompt = '', 
+    apiKey = '', 
+    modelProvider = 'openai',
+    modelName = modelOptions.openai[0],
+    width = 160,
+  } = data;
+
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = event.target;
+    let newData: Partial<LLMNodeData> = { [name]: value };
+
+    if (name === 'modelProvider') {
+      const newProvider = value as keyof typeof modelOptions;
+      if (modelOptions[newProvider] && modelOptions[newProvider].length > 0) {
+        newData.modelName = modelOptions[newProvider][0];
+      } else {
+        newData.modelName = undefined;
+      }
+    }
+    
+    if (data.onNodeDataChange) {
+      data.onNodeDataChange(id, newData);
+    }
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '0.5rem',
+    fontSize: '0.75rem',
+    color: '#fff5f5',
+    background: 'rgba(255, 245, 245, 0.05)',
+    border: '1px solid rgba(255, 245, 245, 0.1)',
+    borderRadius: '0.375rem',
+    outline: 'none',
+  };
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: '0.75rem',
+    fontWeight: '500',
+    color: 'rgba(255, 245, 245, 0.7)',
+    marginBottom: '0.25rem'
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(255, 245, 245, 0.05)',
+      backdropFilter: 'blur(8px)',
+      border: '1px solid rgba(255, 245, 245, 0.1)',
+      borderRadius: '0.5rem',
+      boxShadow: '0 4px 24px -1px rgba(0, 0, 0, 0.2)',
+      width: width,
+      maxWidth: 180,
+      color: '#fff5f5',
+      fontSize: '0.85rem',
+    }}>
+      <div style={{
+        padding: '0.5rem',
+        borderBottom: '1px solid rgba(255, 245, 245, 0.1)',
+      }}>
+        <input
+          type="text"
+          name="label"
+          value={label}
+          onChange={handleInputChange}
+          onPaste={(e) => e.stopPropagation()}
+          style={{
+            fontSize: '0.85rem',
+            fontWeight: '500',
+            color: '#fff5f5',
+            background: 'transparent',
+            outline: 'none',
+            border: 'none',
+            width: '100%',
+            padding: '0.15rem',
+          }}
+          className="focus:ring-1 focus:ring-[#fff5f5] rounded"
+          placeholder="Node Label"
+        />
+      </div>
+      <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div>
+          <label htmlFor={`modelProvider-${id}`} style={labelStyle}>Model Provider</label>
+          <select
+            id={`modelProvider-${id}`}
+            name="modelProvider"
+            value={modelProvider || 'openai'}
+            onChange={handleInputChange}
+            style={inputStyle}
+            className="focus:ring-1 focus:ring-[#fff5f5] cursor-pointer"
+          >
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="google">Google</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`modelName-${id}`} style={labelStyle}>Model Name</label>
+          <select
+            id={`modelName-${id}`}
+            name="modelName"
+            value={modelName || modelOptions[modelProvider || 'openai'][0]}
+            onChange={handleInputChange}
+            style={inputStyle}
+            className="focus:ring-1 focus:ring-[#fff5f5] cursor-pointer"
+            disabled={!modelOptions[modelProvider || 'openai']?.length}
+          >
+            {(modelOptions[modelProvider || 'openai'] || []).map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+            {!(modelOptions[modelProvider || 'openai']?.length) && (
+              <option value="" disabled>No models available for this provider</option>
+            )}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`systemPrompt-${id}`} style={labelStyle}>System Prompt</label>
+          <textarea
+            id={`systemPrompt-${id}`}
+            name="systemPrompt"
+            value={systemPrompt ?? ''}
+            onChange={handleInputChange}
+            onPaste={(e) => e.stopPropagation()}
+            rows={2}
+            style={inputStyle}
+            className="focus:ring-1 focus:ring-[#fff5f5]"
+            placeholder="e.g., You are a helpful assistant."
+          />
+        </div>
+        <div>
+          <label htmlFor={`apiKey-${id}`} style={labelStyle}>API Key</label>
+          <input
+            id={`apiKey-${id}`}
+            type="password"
+            name="apiKey"
+            value={apiKey || ''}
+            onChange={handleInputChange}
+            onPaste={(e) => e.stopPropagation()}
+            style={inputStyle}
+            className="focus:ring-1 focus:ring-[#fff5f5]"
+            placeholder="Enter API Key..."
+          />
+        </div>
+      </div>
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        id="input" 
+        isConnectable={isConnectable} 
+        style={{
+          background: '#fff5f5',
+          width: '0.75rem',
+          height: '0.75rem',
+        }}
+      />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        id="output" 
+        isConnectable={isConnectable} 
+        style={{
+          background: '#fff5f5',
+          width: '0.75rem',
+          height: '0.75rem',
+        }}
+      />
+    </div>
+  );
+};
+
+export default memo(LLMNode); 
