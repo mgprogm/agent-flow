@@ -18,7 +18,11 @@ const modelOptions = {
   google: ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-1.0-pro'],
 };
 
-const LLMNode: React.FC<NodeProps<LLMNodeData>> = ({ id, data, isConnectable }) => {
+interface LLMNodeProps extends NodeProps<LLMNodeData> {
+  onCopyApiKeyToAllLLMs?: (apiKey: string) => void;
+}
+
+const LLMNode: React.FC<LLMNodeProps> = ({ id, data, isConnectable, onCopyApiKeyToAllLLMs }) => {
   const { 
     label = 'LLM Node', 
     systemPrompt = '', 
@@ -154,17 +158,46 @@ const LLMNode: React.FC<NodeProps<LLMNodeData>> = ({ id, data, isConnectable }) 
         </div>
         <div>
           <label htmlFor={`apiKey-${id}`} style={labelStyle}>API Key</label>
-          <input
-            id={`apiKey-${id}`}
-            type="password"
-            name="apiKey"
-            value={apiKey || ''}
-            onChange={handleInputChange}
-            onPaste={(e) => e.stopPropagation()}
-            style={inputStyle}
-            className="focus:ring-1 focus:ring-[#fff5f5]"
-            placeholder="Enter API Key..."
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <input
+              id={`apiKey-${id}`}
+              type="password"
+              name="apiKey"
+              value={apiKey || ''}
+              onChange={handleInputChange}
+              onPaste={(e) => e.stopPropagation()}
+              style={inputStyle}
+              className="focus:ring-1 focus:ring-[#fff5f5]"
+              placeholder="Enter API Key..."
+            />
+            {apiKey && onCopyApiKeyToAllLLMs && (
+              <button
+                type="button"
+                title="Copy API Key to all LLM Nodes"
+                style={{
+                  background: 'rgba(255,255,255,0.32)',
+                  border: '1.5px solid rgba(0,0,0,0.13)',
+                  borderRadius: '0.4rem',
+                  padding: '0 0.6rem',
+                  marginLeft: '0.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)',
+                  backdropFilter: 'blur(8px)',
+                  color: '#222',
+                  fontSize: '0.95em',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s',
+                  height: '2.25rem',
+                  minHeight: '2.25rem',
+                }}
+                onClick={() => onCopyApiKeyToAllLLMs(apiKey)}
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3" y="3" width="10" height="10" rx="2"/></svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <Handle 

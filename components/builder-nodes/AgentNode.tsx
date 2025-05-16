@@ -28,9 +28,11 @@ export interface AgentNodeData {
 
 interface AgentNodeProps extends NodeProps<AgentNodeData> {
   onOpenToolsWindow?: () => void;
+  onCopyFieldToAll?: (field: string, value: string) => void;
+  onCopyApiKeyToAllAgents?: (apiKey: string) => void;
 }
 
-const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow }) => {
+const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyFieldToAll, onCopyApiKeyToAllAgents }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const selectedActionsList = (data.allowedTools || '').split(',').map(t => t.trim()).filter(Boolean);
 
@@ -157,31 +159,62 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
             </div>
             <div>
               <label htmlFor={`llmApiKey-${id}`} style={labelStyle}>LLM API Key</label>
-              <input
-                id={`llmApiKey-${id}`}
-                type="password"
-                name="llmApiKey"
-                value={data.llmApiKey || ''}
-                onChange={handleNodeConfigChange}
-                onPaste={(e) => e.stopPropagation()}
-                style={inputStyle}
-                className="focus:ring-1 focus:ring-[#cbfcfc]"
-                placeholder="Enter LLM API Key..."
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <input
+                  id={`llmApiKey-${id}`}
+                  type="password"
+                  name="llmApiKey"
+                  value={data.llmApiKey || ''}
+                  onChange={handleNodeConfigChange}
+                  onPaste={(e) => e.stopPropagation()}
+                  style={inputStyle}
+                  className="focus:ring-1 focus:ring-[#cbfcfc]"
+                  placeholder="Enter LLM API Key..."
+                />
+                {data.llmApiKey && onCopyApiKeyToAllAgents && (
+                  <button
+                    type="button"
+                    title="Copy API Key to all Agents"
+                    style={{
+                      background: 'rgba(255,255,255,0.32)',
+                      border: '1.5px solid rgba(0,0,0,0.13)',
+                      borderRadius: '0.4rem',
+                      padding: '0 0.6rem',
+                      marginLeft: '0.1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)',
+                      backdropFilter: 'blur(8px)',
+                      color: '#222',
+                      fontSize: '0.95em',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s',
+                      height: '2.25rem',
+                      minHeight: '2.25rem',
+                    }}
+                    onClick={() => onCopyApiKeyToAllAgents(data.llmApiKey!)}
+                  >
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3" y="3" width="10" height="10" rx="2"/></svg>
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <label htmlFor={`systemPrompt-${id}`} style={labelStyle}>System Prompt</label>
-              <textarea
-                id={`systemPrompt-${id}`}
-                name="systemPrompt"
-                value={data.systemPrompt || ''}
-                onChange={handleNodeConfigChange}
-                onPaste={(e) => e.stopPropagation()}
-                rows={2}
-                style={inputStyle}
-                className="focus:ring-1 focus:ring-[#cbfcfc]"
-                placeholder="e.g., You are a helpful agent..."
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <textarea
+                  id={`systemPrompt-${id}`}
+                  name="systemPrompt"
+                  value={data.systemPrompt || ''}
+                  onChange={handleNodeConfigChange}
+                  onPaste={(e) => e.stopPropagation()}
+                  rows={2}
+                  style={inputStyle}
+                  className="focus:ring-1 focus:ring-[#cbfcfc]"
+                  placeholder="e.g., You are a helpful agent..."
+                />
+              </div>
             </div>
           </div>
           {/* Tool Configuration Section */}
@@ -227,7 +260,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
                 <span style={{ color: 'rgba(180, 245, 245, 0.6)' }}>
                   Select an action...
                 </span>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="20" height="20" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>

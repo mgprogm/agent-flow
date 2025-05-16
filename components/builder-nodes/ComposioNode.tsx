@@ -9,7 +9,11 @@ export interface ComposioNodeData {
   onNodeDataChange?: (id: string, data: Partial<Omit<ComposioNodeData, 'onNodeDataChange'>>) => void;
 }
 
-const ComposioNode: React.FC<NodeProps<ComposioNodeData>> = ({ id, data, isConnectable }) => {
+interface ComposioNodeProps extends NodeProps<ComposioNodeData> {
+  onCopyApiKeyToAllComposioNodes?: (apiKey: string) => void;
+}
+
+const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, onCopyApiKeyToAllComposioNodes }) => {
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [availableActions, setAvailableActions] = React.useState<string[]>([]);
   const selectedActionsList = (data.toolActions || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -100,17 +104,46 @@ const ComposioNode: React.FC<NodeProps<ComposioNodeData>> = ({ id, data, isConne
             </div>
           )}
           <label htmlFor={`composioApiKey-${id}`} style={labelStyle}>Composio API Key</label>
-          <input
-            id={`composioApiKey-${id}`}
-            type="password"
-            name="composioApiKey"
-            value={data.composioApiKey || ''}
-            onChange={handleInputChange}
-            onPaste={(e) => e.stopPropagation()}
-            style={inputStyle}
-            className="focus:ring-1 focus:ring-[#fff5f5]"
-            placeholder="comp_..."
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <input
+              id={`composioApiKey-${id}`}
+              type="password"
+              name="composioApiKey"
+              value={data.composioApiKey || ''}
+              onChange={handleInputChange}
+              onPaste={(e) => e.stopPropagation()}
+              style={inputStyle}
+              className="focus:ring-1 focus:ring-[#fff5f5]"
+              placeholder="comp_..."
+            />
+            {data.composioApiKey && onCopyApiKeyToAllComposioNodes && (
+              <button
+                type="button"
+                title="Copy API Key to all Composio Nodes"
+                style={{
+                  background: 'rgba(255,255,255,0.32)',
+                  border: '1.5px solid rgba(0,0,0,0.13)',
+                  borderRadius: '0.4rem',
+                  padding: '0 0.6rem',
+                  marginLeft: '0.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)',
+                  backdropFilter: 'blur(8px)',
+                  color: '#222',
+                  fontSize: '0.95em',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s',
+                  height: '2.25rem',
+                  minHeight: '2.25rem',
+                }}
+                onClick={() => onCopyApiKeyToAllComposioNodes(data.composioApiKey!)}
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3" y="3" width="10" height="10" rx="2"/></svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <Handle 

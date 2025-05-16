@@ -291,11 +291,11 @@ const allSidebarItems = [
   const nodeTypes: NodeTypes = useMemo(() => ({
     customInput: (props) => <InputNode {...props} data={{...props.data, onNodeDataChange: onNodeDataChange as any }} />,
     customOutput: OutputNode,
-    llm: (props) => <LLMNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any}} />,
-    composio: (props) => <ComposioNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} />,
-    agent: (props) => <AgentNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} />,
+    llm: (props) => <LLMNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any}} onCopyApiKeyToAllLLMs={(apiKey) => setNodes(nds => nds.map(n => n.type === 'llm' ? { ...n, data: { ...n.data, apiKey } } : n))} />,
+    composio: (props) => <ComposioNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onCopyApiKeyToAllComposioNodes={(apiKey) => setNodes(nds => nds.map(n => n.type === 'composio' ? { ...n, data: { ...n.data, composioApiKey: apiKey } } : n))} />,
+    agent: (props) => <AgentNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllAgents={(apiKey) => setNodes(nds => nds.map(n => n.type === 'agent' ? { ...n, data: { ...n.data, llmApiKey: apiKey } } : n))} />,
     patternMeta: PatternMetaNode,
-  }), [onNodeDataChange]);
+  }), [onNodeDataChange, setNodes]);
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),

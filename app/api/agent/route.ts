@@ -103,15 +103,15 @@ async function executeGraphSequentially(
         apiKey: composioApiKey, 
         toolset: new LangchainToolset()
       })
-                         console.log(`[Agent Node ${currentNode.id}] Fetching tools: ${allowedTools.join(', ')}`);
-                         toolsForAgent = await composio.getTools( 'user123', {tools: allowedTools} );
-                         console.log(`[Agent Node ${currentNode.id}] Loaded ${toolsForAgent.length} tools.`);
+      console.log(`[Agent Node ${currentNode.id}] Fetching tools: ${allowedTools.join(', ')}`);
+      toolsForAgent = await composio.getTools('user123', { tools: allowedTools });
+      console.log(`[Agent Node ${currentNode.id}] Loaded ${toolsForAgent.length} tools.`);
     } catch (error: any) {
-                         console.error(`[Agent Node ${currentNode.id}] Failed to load tools:`, error);
-                         steps.push(`Warning (Agent ${currentNode.id}): Failed to load tools - ${error.message}`);
+      console.error(`[Agent Node ${currentNode.id}] Failed to load tools:`, error);
+      steps.push(`Warning (Agent ${currentNode.id}): Failed to load tools - ${error.message}`);
     }
   } else {
-                    console.log(`[Agent Node ${currentNode.id}] No Composio API key or tools specified.`);
+    console.log(`[Agent Node ${currentNode.id}] No Composio API key or tools specified.`);
                  }
 
                  const modelWithTools = agentLlm.bindTools(toolsForAgent);
@@ -169,7 +169,7 @@ async function executeGraphSequentially(
                                  }
                              } else {
                                   console.error(`[Agent Node ${currentNode.id}] Tool ${toolCall.function.name} requested but not found/loaded.`);
-                                  toolOutputContent = `Error: Tool "${toolCall.function.name}" not found.`;
+                                  toolOutputContent = `Error: Tool \"${toolCall.function.name}\" not found.`;
                                   steps.push(`Agent ${currentNode.id} Turn ${turns}: Tool ${toolCall.function.name} not found.`);
                              }
                              toolMessages.push(new ToolMessage({

@@ -37,8 +37,8 @@ const OutputNode: React.FC<NodeProps<OutputNodeData>> = ({ data, isConnectable }
         border: '1px solid rgba(255, 245, 245, 0.1)',
         borderRadius: '0.5rem',
         boxShadow: '0 4px 24px -1px rgba(0, 0, 0, 0.2)',
-        width: data.width || 280,
-        maxWidth: 280,
+        width: data.width || 700,
+        maxWidth: 700,
         color: '#fff5f5',
         fontSize: '0.85rem',
       }}>

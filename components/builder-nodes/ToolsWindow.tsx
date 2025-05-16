@@ -291,8 +291,9 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
 
   const handleAddActionsToAgent = () => {
     const selected = actions.filter(a => selectedActionNames.includes(a.name));
-    if (selected.length > 0) {
-      onSelectTool(selected);
+    if (selected.length > 0 && selectedTool) {
+      const formattedActions = selected.map(a => ({ name: `${selectedTool.slug}_${a.name}` }));
+      onSelectTool(formattedActions);
     }
   };
 
