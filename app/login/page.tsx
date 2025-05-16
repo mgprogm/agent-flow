@@ -3,11 +3,13 @@
 import { useState, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
 export default function LoginPage() {
   const [message, setMessage] = useState("")
-  const [loading, setLoading] = useState<'login' | 'signup' | 'google' | null>(null)
+  const [loading, setLoading] = useState<'login' | 'signup' | 'google' | 'reset' | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
+  const [resetEmail, setResetEmail] = useState("")
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -30,7 +32,7 @@ export default function LoginPage() {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: 'https://agent-flow-sigma.vercel.app' } });
     if (error) setMessage(error.message);
     else setMessage("Check your email for a confirmation link before logging in.");
     setLoading(null);
@@ -46,6 +48,18 @@ export default function LoginPage() {
     })
     if (error) setMessage(error.message)
     setLoading(null)
+  }
+
+  async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading('reset');
+    setMessage("");
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: 'https://agent-flow-sigma.vercel.app' });
+    if (error) setMessage(error.message);
+    else setMessage("Check your email for a password reset link.");
+    setLoading(null);
+    setResetEmail("");
   }
 
   return (
@@ -78,6 +92,51 @@ export default function LoginPage() {
             autoComplete="current-password"
             className="px-4 py-3 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition placeholder-zinc-500 text-base"
           />
+          <div className="flex w-full justify-end mt-1 mb-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="text-xs text-cyan-300 hover:underline focus:outline-none"
+                >
+                  Forgot password?
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xs w-full bg-white/10 border border-white/20 rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-3 backdrop-blur-xl relative">
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); (document.activeElement as HTMLElement)?.blur(); }}
+                  className="absolute top-3 right-3 text-zinc-300 hover:text-white text-lg focus:outline-none"
+                  aria-label="Close"
+                  data-close-dialog
+                >
+                  ×
+                </button>
+                <DialogHeader className="w-full text-center mb-2">
+                  <DialogTitle className="text-lg font-semibold text-white">Reset Password</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleResetPassword} className="w-full flex flex-col gap-3 mt-1">
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={e => setResetEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    className="px-4 py-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition placeholder-zinc-400 text-sm"
+                  />
+                  <DialogFooter className="w-full">
+                    <button
+                      type="submit"
+                      className="w-full bg-primary text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-primary/90 transition text-sm"
+                      disabled={loading === 'reset'}
+                    >
+                      {loading === 'reset' ? 'Sending...' : 'Send Reset Link'}
+                    </button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
           <div className="flex gap-3 mt-2">
             <button
               type="submit"
