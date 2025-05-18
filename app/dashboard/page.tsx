@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, LayoutGrid, Search, Settings, User, History, KeyRound, Folder, LogOut, Check, Pencil, Loader2 } from 'lucide-react'
+import { Plus, LayoutGrid, Search, Settings, User, History, KeyRound, Folder, LogOut, Check, Pencil, Loader2, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const [renameLoading, setRenameLoading] = useState<string | null>(null)
   const [cardLoadingId, setCardLoadingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -43,6 +44,10 @@ export default function DashboardPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setCreateLoading(false); return }
+    
+    // Check if this is the user's first flow
+    const isFirstFlow = flows.length === 0
+    
     const { data, error } = await supabase
       .from('flows')
       .insert({
@@ -54,7 +59,12 @@ export default function DashboardPage() {
       .select('id')
       .single()
     setCreateLoading(false)
+    
     if (!error && data?.id) {
+      // If it's the first flow, store that we should show the tutorial
+      if (isFirstFlow) {
+        localStorage.setItem('showBuilderTutorial', 'true')
+      }
       router.push(`/builder/${data.id}`)
     }
   }
@@ -72,6 +82,19 @@ export default function DashboardPage() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/')
+  }
+
+  const handleDelete = async (e: React.MouseEvent, flowId: string) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this flow? This action cannot be undone.')) return
+    
+    setDeleteLoading(flowId)
+    const supabase = createClient()
+    const { error } = await supabase.from('flows').delete().eq('id', flowId)
+    if (!error) {
+      setFlows(flows => flows.filter(f => f.id !== flowId))
+    }
+    setDeleteLoading(null)
   }
 
   if (isAuthenticated === null) return null
@@ -128,30 +151,43 @@ export default function DashboardPage() {
                     <Loader2 className="animate-spin" size={32} />
                   </div>
                 )}
-                <div className="flex items-center gap-2 mb-2">
-                  <LayoutGrid size={20} className="text-primary" />
-                  {editingId === flow.id ? (
-                    <form onSubmit={e => { e.preventDefault(); handleRename(flow.id, editValue) }} className="flex items-center gap-1">
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={() => handleRename(flow.id, editValue)}
-                        className="text-lg font-semibold bg-transparent border-b border-primary text-white focus:outline-none px-1 w-32"
-                      />
-                      <button type="submit" className="ml-1 p-1 rounded hover:bg-primary/20 transition disabled:opacity-60 disabled:cursor-not-allowed" disabled={renameLoading === flow.id}>
-                        {renameLoading === flow.id ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
-                      </button>
-                    </form>
-                  ) : (
-                    <span
-                      className="text-lg font-semibold text-white group-hover:text-grey transition cursor-pointer flex items-center gap-1"
-                      onClick={e => { e.stopPropagation(); setEditingId(flow.id); setEditValue(flow.name) }}
-                    >
-                      {flow.name}
-                      <Pencil size={14} className="ml-1 opacity-60 group-hover:opacity-100" />
-                    </span>
-                  )}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <LayoutGrid size={20} className="text-primary" />
+                    {editingId === flow.id ? (
+                      <form onSubmit={e => { e.preventDefault(); handleRename(flow.id, editValue) }} className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={() => handleRename(flow.id, editValue)}
+                          className="text-lg font-semibold bg-transparent border-b border-primary text-white focus:outline-none px-1 w-32"
+                        />
+                        <button type="submit" className="ml-1 p-1 rounded hover:bg-primary/20 transition disabled:opacity-60 disabled:cursor-not-allowed" disabled={renameLoading === flow.id}>
+                          {renameLoading === flow.id ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                        </button>
+                      </form>
+                    ) : (
+                      <span
+                        className="text-lg font-semibold text-white group-hover:text-grey transition cursor-pointer flex items-center gap-1"
+                        onClick={e => { e.stopPropagation(); setEditingId(flow.id); setEditValue(flow.name) }}
+                      >
+                        {flow.name}
+                        <Pencil size={14} className="ml-1 opacity-60 group-hover:opacity-100" />
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => handleDelete(e, flow.id)}
+                    className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all duration-200"
+                    disabled={deleteLoading === flow.id}
+                  >
+                    {deleteLoading === flow.id ? (
+                      <Loader2 className="animate-spin text-red-500" size={18} />
+                    ) : (
+                      <Trash2 size={18} className="text-red-500" />
+                    )}
+                  </button>
                 </div>
                 <div className="text-zinc-400 text-sm mb-1">{flow.description}</div>
                 <div className="flex items-center gap-2 mt-auto text-xs text-zinc-500">

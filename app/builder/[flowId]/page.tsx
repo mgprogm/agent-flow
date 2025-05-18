@@ -40,6 +40,8 @@ import { Input } from '@/components/ui/input';
 import PatternMetaNode from '@/components/builder-nodes/PatternMetaNode';
 import FlowingEdge from '@/components/builder-nodes/FlowingEdge';
 import ToolsWindow from '@/components/builder-nodes/ToolsWindow';
+import OnboardingTutorial from '@/app/dashboard/onboarding/OnboardingTutorial';
+import Joyride from 'react-joyride';
 
 export default function BuilderPage() {
   "use client";
@@ -142,7 +144,7 @@ const allSidebarItems = [
   const [isAgentRunning, setIsAgentRunning] = useState(false);
 
   // State for sidebar visibility
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
 
   // Track selected nodes
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
@@ -174,6 +176,11 @@ const allSidebarItems = [
   const [dropAsMetaNode, setDropAsMetaNode] = useState(false);
 
   const [toolsWindowOpen, setToolsWindowOpen] = useState(false);
+
+  // Add state for tutorial
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  const [runJoyride, setRunJoyride] = useState(false);
 
   const edgeTypes = useMemo(() => ({
     flowing: FlowingEdge,
@@ -885,6 +892,43 @@ const allSidebarItems = [
     return '';
   };
 
+  // Check if tutorial should be shown on mount
+  useEffect(() => {
+    const shouldShowTutorial = localStorage.getItem('showBuilderTutorial');
+    if (shouldShowTutorial === 'true') {
+      setTimeout(() => {
+        setRunJoyride(true);
+        localStorage.removeItem('showBuilderTutorial');
+      }, 500);
+    }
+  }, []);
+
+  // Add tutorial completion handler
+  const handleTutorialComplete = () => {
+    setRunJoyride(false);
+  };
+
+  const joyrideSteps = [
+    {
+      target: '.overflow-y-auto.transition-all',
+      content: 'This is the Node Library. Drag nodes onto the canvas to build your flow.',
+      placement: 'right' as const,
+      disableBeacon: true,
+    },
+    {
+      target: '[data-tutorial="canvas"]',
+      content: 'This is your canvas. Connect nodes to define your workflow.',
+      placement: 'center' as const,
+      disableBeacon: true,
+    },
+    {
+      target: '[data-tutorial="run-agent"]',
+      content: 'Click here to run your agent once your flow is ready!',
+      placement: 'top' as const,
+      disableBeacon: true,
+    },
+  ];
+
   if (backLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -907,6 +951,27 @@ const allSidebarItems = [
       color: '#fff5f5',
       backdropFilter: 'blur(10px)',
     }}>
+      <Joyride
+        steps={joyrideSteps}
+        run={runJoyride}
+        continuous
+        showSkipButton
+        showProgress
+        styles={{
+          options: {
+            zIndex: 10000,
+            primaryColor: '#111',
+            textColor: '#222',
+            backgroundColor: '#fff',
+          },
+        }}
+        callback={data => {
+          if (data.status === 'finished' || data.status === 'skipped') {
+            setRunJoyride(false);
+          }
+        }}
+      />
+
       {/* Top Bar */}
       <header className="h-16 flex items-center justify-between px-6 shrink-0" style={{ 
         background: 'rgba(0, 0, 0, 0.7)',
@@ -1008,15 +1073,16 @@ const allSidebarItems = [
       <div className="flex flex-grow min-h-0">
         {/* Left Sidebar */}
         <aside 
-            className={`flex flex-col shrink-0 overflow-y-auto transition-all duration-300 ease-in-out 
-                       ${isLeftSidebarOpen ? 'w-72 p-4' : 'w-0 p-0 overflow-hidden'}`}
-            style={{ 
-              background: 'rgba(0, 0, 0, 0.7)',
-              borderRight: '1px solid rgba(255, 245, 245, 0.2)',
-              backdropFilter: 'blur(10px)',
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'rgba(255, 245, 245, 0.3) transparent'
-            }}
+          data-tutorial="node-library"
+          className={`flex flex-col shrink-0 overflow-y-auto transition-all duration-300 ease-in-out 
+                     ${isLeftSidebarOpen ? 'w-72 p-4' : 'w-0 p-0 overflow-hidden'}`}
+          style={{ 
+            background: 'rgba(0, 0, 0, 0.7)',
+            borderRight: '1px solid rgba(255, 245, 245, 0.2)',
+            backdropFilter: 'blur(10px)',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(255, 245, 245, 0.3) transparent'
+          }}
         >
           {isLeftSidebarOpen && (
             <>
@@ -1038,6 +1104,12 @@ const allSidebarItems = [
                 {filteredSidebarItems.map(item => (
                   <div
                     key={item.key}
+                    data-tutorial={
+                      item.dragType === 'node' && 
+                      ((item.dragData as any).nodeType === 'customInput' ? 'input-node' : 
+                       (item.dragData as any).nodeType === 'llm' ? 'llm-node' : 
+                       undefined)
+                    }
                     onDragStart={event => {
                       if (item.dragType === 'node') {
                         const nodeData = item.dragData as { nodeType: string; nodeLabel: string; initialData: any };
@@ -1082,7 +1154,12 @@ const allSidebarItems = [
         </aside>
 
         {/* React Flow Canvas */}
-        <main className="flex-grow h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
+        <main 
+          data-tutorial="canvas"
+          className="flex-grow h-full relative" 
+          onDrop={onDrop} 
+          onDragOver={onDragOver}
+        >
           <Squares className="absolute inset-0 z-0" />
           <ReactFlow
             nodes={highlightedNodes}
@@ -1159,6 +1236,7 @@ const allSidebarItems = [
           {/* Play Button at bottom center */}
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-10">
             <button
+              data-tutorial="run-agent"
               onClick={handleRunAgentFromBuilder}
               disabled={isAgentRunning}
               className="px-6 py-3 text-base font-medium rounded-lg shadow-md transition-all duration-200 flex items-center justify-center gap-2 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed border border-slate-300 hover:shadow-lg"
