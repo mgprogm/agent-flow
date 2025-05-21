@@ -1,6 +1,7 @@
 "use client";
-import React, { memo, ChangeEvent } from 'react';
+import React, { memo, ChangeEvent, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
+import ToolsWindow from './ToolsWindow';
 
 export interface ComposioNodeData {
   label?: string;
@@ -10,36 +11,26 @@ export interface ComposioNodeData {
 }
 
 interface ComposioNodeProps extends NodeProps<ComposioNodeData> {
+  onOpenToolsWindow?: () => void;
   onCopyApiKeyToAllComposioNodes?: (apiKey: string) => void;
 }
 
-const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, onCopyApiKeyToAllComposioNodes }) => {
-  const [showDropdown, setShowDropdown] = React.useState(false);
-  const [availableActions, setAvailableActions] = React.useState<string[]>([]);
+const toolkitOptions = [
+  { slug: 'gmail', name: 'Gmail' },
+  { slug: 'github', name: 'GitHub' },
+  { slug: 'slack', name: 'Slack' },
+  { slug: 'notion', name: 'Notion' },
+  { slug: 'google_drive', name: 'Google Drive' },
+  // Add more toolkits as needed
+];
+
+const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyApiKeyToAllComposioNodes }) => {
+  const [showDropdown, setShowDropdown] = useState(false);
   const selectedActionsList = (data.toolActions || '').split(',').map(t => t.trim()).filter(Boolean);
 
-  React.useEffect(() => {
-    async function fetchActions() {
-      if (!data.composioApiKey) {
-        setAvailableActions([]);
-        return;
-      }
-      try {
-        const res = await fetch(`/api/composio-tools/actions?toolkitSlug=gmail&composioApiKey=${encodeURIComponent(data.composioApiKey)}`);
-        const d = await res.json();
-        setAvailableActions(d.actions ? d.actions.map((a: any) => a.name) : []);
-      } catch {
-        setAvailableActions([]);
-      }
-    }
-    fetchActions();
-  }, [data.composioApiKey]);
-
-  const handleInputChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleNodeConfigChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
-    if (data.onNodeDataChange) {
-      data.onNodeDataChange(id, { [name]: value });
-    }
+    if (data.onNodeDataChange) data.onNodeDataChange(id, { [name]: value });
   };
 
   const inputStyle = {
@@ -79,7 +70,7 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
           type="text"
           name="label"
           value={data.label ?? 'Composio Tool'}
-          onChange={handleInputChange}
+          onChange={handleNodeConfigChange}
           onPaste={(e) => e.stopPropagation()}
           style={{
             fontSize: '0.875rem',
@@ -110,7 +101,7 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
               type="password"
               name="composioApiKey"
               value={data.composioApiKey || ''}
-              onChange={handleInputChange}
+              onChange={handleNodeConfigChange}
               onPaste={(e) => e.stopPropagation()}
               style={inputStyle}
               className="focus:ring-1 focus:ring-[#fff5f5]"
@@ -143,6 +134,67 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
                 <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3" y="3" width="10" height="10" rx="2"/></svg>
               </button>
             )}
+          </div>
+        </div>
+        <div className="relative">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <label style={labelStyle}>Available Actions</label>
+          </div>
+          <div 
+            onClick={() => setShowDropdown(!showDropdown)}
+            style={{
+              ...inputStyle,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+            className="hover:bg-[rgba(180,245,245,0.08)] focus:bg-[rgba(180,245,245,0.08)] transition-colors duration-150"
+          >
+            <span style={{ color: 'rgba(180, 245, 245, 0.6)' }}>
+              Select an action...
+            </span>
+            <svg width="20" height="20" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          {showDropdown && (
+            <div 
+              className="absolute left-0 right-0 mt-1 bg-[#0a2323] border border-[#cbfcfc33] rounded-md shadow-lg z-20 max-h-48 overflow-y-auto"
+              style={{ fontSize: '0.85em' }}
+            >
+              <div
+                className="px-3 py-2 cursor-pointer hover:bg-[#cbfcfc22] text-[#cbfcfc] font-medium border-b border-[#cbfcfc33]"
+                onClick={() => {
+                  if (onOpenToolsWindow) onOpenToolsWindow();
+                  setShowDropdown(false);
+                }}
+              >
+                + Add Tool
+              </div>
+            </div>
+          )}
+          <div 
+            className="flex flex-wrap gap-2 mt-2"
+            style={{ maxHeight: '4.5rem', overflowY: 'auto' }}
+          >
+            {selectedActionsList.map(actionKey => (
+              <div key={actionKey} className="bg-[#cbfcfc22] text-[#cbfcfc] rounded-full px-3 py-1 text-xs flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="text-[#cbfcfc] hover:text-white leading-none mr-1.5"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1em', padding: '0'}}
+                  onClick={() => {
+                    const updated = selectedActionsList.filter(a => a !== actionKey);
+                    if (data.onNodeDataChange) data.onNodeDataChange(id, { toolActions: updated.join(',') });
+                  }}
+                  aria-label={`Remove ${actionKey}`}
+                >
+                  ×
+                </button>
+                {actionKey}
+              </div>
+            ))}
           </div>
         </div>
       </div>

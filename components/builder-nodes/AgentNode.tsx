@@ -13,15 +13,12 @@ const modelOptions = {
 // Updated AgentNodeData interface
 export interface AgentNodeData {
   label?: string;
-  // LLM Fields
   systemPrompt?: string;
-  llmApiKey?: string; // Renamed to avoid conflict if needed
+  llmApiKey?: string; 
   modelProvider?: 'openai' | 'anthropic' | 'google';
   modelName?: string;
-  // Tool Fields
   composioApiKey?: string;
-  allowedTools?: string; // Simple text area for now, e.g., "gmail.send_email, github.create_issue"
-  // Callback for data changes within this node
+  allowedTools?: string; 
   onNodeDataChange?: (id: string, data: Partial<Omit<AgentNodeData, 'onNodeDataChange'>>) => void;
   width?: number;
 }
@@ -44,21 +41,6 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
       newData.modelName = modelOptions[newProvider]?.[0] || undefined;
     }
     if (data.onNodeDataChange) data.onNodeDataChange(id, newData);
-  };
-
-  const handleRemoveTool = useCallback((toolNameToRemove: string) => {
-    const updatedSelectedTools = selectedActionsList.filter(t => t !== toolNameToRemove);
-    if (data.onNodeDataChange) data.onNodeDataChange(id, { allowedTools: updatedSelectedTools.join(',') });
-  }, [selectedActionsList, data, id]);
-
-  const handleConnectTool = (toolName: string, actions: string[]) => {
-    if (!selectedActionsList.includes(toolName)) {
-      const updatedSelectedTools = [...selectedActionsList, toolName];
-      if (data.onNodeDataChange) {
-        data.onNodeDataChange(id, { allowedTools: updatedSelectedTools.join(',') });
-      }
-    }
-    if (onOpenToolsWindow) onOpenToolsWindow(); // just close, parent will handle
   };
 
   // Common styles

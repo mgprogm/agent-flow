@@ -19,6 +19,7 @@ import ReactFlow, {
   NodeDragHandler,
   NodeChange,
   EdgeChange,
+  SelectionMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ReactMarkdown from 'react-markdown';
@@ -270,19 +271,21 @@ const allSidebarItems = [
         setNodes(flow.graph_json.nodes || []);
         setEdges(flow.graph_json.edges || []);
       }
+      setInitialNodesLoaded(true);
+      setInitialEdgesLoaded(true);
       setLoading(false);
     };
     fetchFlowData();
   }, [flowId]);
 
   useEffect(() => {
-    if (nodes.length === 0 && edges.length === 0) return;
+    if (!initialNodesLoaded || !initialEdgesLoaded) return;
     const updateFlow = async () => {
       const supabase = createClient();
       await supabase.from('flows').update({ graph_json: { nodes, edges } }).eq('id', flowId);
     };
     updateFlow();
-  }, [nodes, edges, flowId]);
+  }, [nodes, edges, flowId, initialNodesLoaded, initialEdgesLoaded]);
 
   const onNodeDataChange = useCallback(
     (id: string, newData: Partial<InputNodeData | LLMNodeData | ComposioNodeData | AgentNodeData>) => {
@@ -299,7 +302,7 @@ const allSidebarItems = [
     customInput: (props) => <InputNode {...props} data={{...props.data, onNodeDataChange: onNodeDataChange as any }} />,
     customOutput: OutputNode,
     llm: (props) => <LLMNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any}} onCopyApiKeyToAllLLMs={(apiKey) => setNodes(nds => nds.map(n => n.type === 'llm' ? { ...n, data: { ...n.data, apiKey } } : n))} />,
-    composio: (props) => <ComposioNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onCopyApiKeyToAllComposioNodes={(apiKey) => setNodes(nds => nds.map(n => n.type === 'composio' ? { ...n, data: { ...n.data, composioApiKey: apiKey } } : n))} />,
+    composio: (props) => <ComposioNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllComposioNodes={(apiKey) => setNodes(nds => nds.map(n => n.type === 'composio' ? { ...n, data: { ...n.data, composioApiKey: apiKey } } : n))} />,
     agent: (props) => <AgentNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllAgents={(apiKey) => setNodes(nds => nds.map(n => n.type === 'agent' ? { ...n, data: { ...n.data, llmApiKey: apiKey } } : n))} />,
     patternMeta: PatternMetaNode,
   }), [onNodeDataChange, setNodes]);
@@ -980,7 +983,11 @@ const allSidebarItems = [
       }}>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={async () => {
+              const supabase = createClient();
+              await supabase.from('flows').update({ graph_json: { nodes, edges } }).eq('id', flowId);
+              router.push('/dashboard');
+            }}
             className="p-1.5 rounded-md transition-all duration-200 hover:bg-[#fff5f5]/20 hover:scale-105"
             style={{
               background: 'rgba(255, 245, 245, 0.1)',
@@ -1201,6 +1208,7 @@ const allSidebarItems = [
             onPaneClick={onPaneClick}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
+            selectionMode={SelectionMode.Partial}
             onSelectionChange={onSelectionChange}
           >
             <Controls />

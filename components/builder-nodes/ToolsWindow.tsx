@@ -319,6 +319,23 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
     }
   };
 
+  if (!composioApiKey) {
+    return (
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(10,10,20,0.55)', backdropFilter: 'blur(12px)' }}>
+        <div className="bg-[rgba(30,30,30,0.9)] border border-red-400/30 rounded-2xl shadow-2xl px-10 py-12 flex flex-col items-center justify-center">
+          <div className="text-2xl font-bold text-red-400 mb-4">Composio API Key not found</div>
+          <div className="text-lg text-[#fff5f5]/80 mb-6">Please try setting your Composio API Key again in the node.</div>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition-all duration-200"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="fixed inset-0 z-[1000] flex items-center justify-center"
