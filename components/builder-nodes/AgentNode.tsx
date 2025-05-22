@@ -148,7 +148,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
                   name="llmApiKey"
                   value={data.llmApiKey || ''}
                   onChange={handleNodeConfigChange}
-                  onPaste={(e) => e.stopPropagation()}
+                  onPaste={e => { e.stopPropagation(); }}
                   style={inputStyle}
                   className="focus:ring-1 focus:ring-[#cbfcfc]"
                   placeholder="Enter LLM API Key..."
@@ -216,7 +216,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
                 name="composioApiKey"
                 value={data.composioApiKey || ''}
                 onChange={handleNodeConfigChange}
-                onPaste={(e) => e.stopPropagation()}
+                onPaste={e => { e.stopPropagation(); }}
                 style={inputStyle}
                 className="focus:ring-1 focus:ring-[#cbfcfc]"
                 placeholder="Enter Composio API Key (optional)"
@@ -267,7 +267,6 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
 
             <div 
               className="flex flex-wrap gap-2 mt-2"
-              style={{ maxHeight: '4.5rem', overflowY: 'auto' }}
             >
               {selectedActionsList.map(actionKey => (
                 <div key={actionKey} className="bg-[#cbfcfc22] text-[#cbfcfc] rounded-full px-3 py-1 text-xs flex items-center gap-1.5">

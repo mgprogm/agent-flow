@@ -43,6 +43,7 @@ import FlowingEdge from '@/components/builder-nodes/FlowingEdge';
 import ToolsWindow from '@/components/builder-nodes/ToolsWindow';
 import OnboardingTutorial from '@/app/dashboard/onboarding/OnboardingTutorial';
 import Joyride from 'react-joyride';
+import AgentBuilder from '@/components/builder-nodes/AgentBuilder';
 
 export default function BuilderPage() {
   "use client";
@@ -1242,7 +1243,7 @@ const allSidebarItems = [
             />
           )}
           {/* Play Button at bottom center */}
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-10">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-4">
             <button
               data-tutorial="run-agent"
               onClick={handleRunAgentFromBuilder}
@@ -1259,6 +1260,34 @@ const allSidebarItems = [
                 <span>Run Agent</span>
               )}
             </button>
+            <AgentBuilder onSubmit={async (data, close) => {
+              // Call backend to generate graph
+              const res = await fetch('/api/chat-to-agent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  requestBody: {
+                    useCase: {
+                      useCase: data.description,
+                      llmApiKey: data.llmApiKey,
+                      composioApiKey: data.composioApiKey,
+                    }
+                  }
+                })
+              });
+              if (!res.ok) {
+                alert('Failed to generate agent flow');
+                return;
+              }
+              const result = await res.json();
+              if (result.nodes && result.edges) {
+                setNodes(result.nodes);
+                setEdges(result.edges);
+                close();
+              } else {
+                alert('Agent builder did not return a valid graph');
+              }
+            }} />
           </div>
         </main>
       </div>

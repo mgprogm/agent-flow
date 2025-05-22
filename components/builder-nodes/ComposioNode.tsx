@@ -102,7 +102,7 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
               name="composioApiKey"
               value={data.composioApiKey || ''}
               onChange={handleNodeConfigChange}
-              onPaste={(e) => e.stopPropagation()}
+              onPaste={e => { e.stopPropagation(); }}
               style={inputStyle}
               className="focus:ring-1 focus:ring-[#fff5f5]"
               placeholder="your api key"
@@ -176,7 +176,6 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
           )}
           <div 
             className="flex flex-wrap gap-2 mt-2"
-            style={{ maxHeight: '4.5rem', overflowY: 'auto' }}
           >
             {selectedActionsList.map(actionKey => (
               <div key={actionKey} className="bg-[#cbfcfc22] text-[#cbfcfc] rounded-full px-3 py-1 text-xs flex items-center gap-1.5">
