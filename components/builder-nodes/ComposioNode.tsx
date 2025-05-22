@@ -105,7 +105,7 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
               onPaste={(e) => e.stopPropagation()}
               style={inputStyle}
               className="focus:ring-1 focus:ring-[#fff5f5]"
-              placeholder="comp_..."
+              placeholder="your api key"
             />
             {data.composioApiKey && onCopyApiKeyToAllComposioNodes && (
               <button
