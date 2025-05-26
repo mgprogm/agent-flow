@@ -1266,17 +1266,22 @@ const allSidebarItems = [
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  requestBody: {
-                    useCase: {
-                      useCase: data.description,
-                      llmApiKey: data.llmApiKey,
-                      composioApiKey: data.composioApiKey,
-                    }
-                  }
+                  useCase: data.description,
+                  llmApiKey: data.llmApiKey,
+                  composioApiKey: data.composioApiKey,
                 })
               });
               if (!res.ok) {
-                alert('Failed to generate agent flow');
+                let errorMsg = 'Failed to generate agent flow';
+                try {
+                  const err = await res.json();
+                  if (err.error && err.details) {
+                    errorMsg = `${err.error}: ${err.details}`;
+                  } else if (err.error) {
+                    errorMsg = err.error;
+                  }
+                } catch {}
+                alert(errorMsg);
                 return;
               }
               const result = await res.json();

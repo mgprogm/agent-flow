@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useCallback, useEffect, ChangeEvent } from 'react';
+import React, { useState, useCallback, useEffect, ChangeEvent, useRef } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import ToolsWindow from './ToolsWindow';
 
@@ -31,6 +31,7 @@ interface AgentNodeProps extends NodeProps<AgentNodeData> {
 
 const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyFieldToAll, onCopyApiKeyToAllAgents }) => {
   const [showDropdown, setShowDropdown] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedActionsList = (data.allowedTools || '').split(',').map(t => t.trim()).filter(Boolean);
 
   const handleNodeConfigChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -42,6 +43,13 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
     }
     if (data.onNodeDataChange) data.onNodeDataChange(id, newData);
   };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [data.systemPrompt]);
 
   // Common styles
   const inputStyle = {
@@ -193,8 +201,9 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
                   value={data.systemPrompt || ''}
                   onChange={handleNodeConfigChange}
                   onPaste={(e) => e.stopPropagation()}
-                  rows={2}
-                  style={inputStyle}
+                  rows={1}
+                  ref={textareaRef}
+                  style={{ ...inputStyle, resize: 'none', overflow: 'hidden', minHeight: 32, maxHeight: 200, transition: 'height 0.2s' }}
                   className="focus:ring-1 focus:ring-[#cbfcfc]"
                   placeholder="e.g., You are a helpful agent..."
                 />

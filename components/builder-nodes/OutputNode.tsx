@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { LogOut, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +13,15 @@ export interface OutputNodeData {
 
 const OutputNode: React.FC<NodeProps<OutputNodeData>> = ({ data, isConnectable }) => {
   const [copied, setCopied] = useState(false);
+  const outputRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.style.height = 'auto';
+      outputRef.current.style.height = outputRef.current.scrollHeight + 'px';
+    }
+  }, [data.agentOutput]);
+
   const handleCopy = () => {
     if (data.agentOutput) {
       navigator.clipboard.writeText(data.agentOutput);
@@ -76,12 +85,15 @@ const OutputNode: React.FC<NodeProps<OutputNodeData>> = ({ data, isConnectable }
         className="nodrag nowheel"
         style={{
           padding: '0.75rem',
-          maxHeight: '300px',
+          minHeight: 40,
+          maxHeight: 300,
           overflowY: 'auto',
           background: 'rgba(255, 245, 245, 0.05)',
           userSelect: 'text',
           cursor: 'text',
-        }}>
+        }}
+        ref={outputRef}
+      >
         {data.agentOutput ? (
           <div 
             className="nodrag nowheel"

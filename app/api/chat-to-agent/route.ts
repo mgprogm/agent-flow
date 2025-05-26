@@ -13,7 +13,7 @@ function getModelDetails(apiKey: string): { provider: string; modelName: string;
             modelName: "claude-3-5-sonnet-20240620",
             chatModel: new ChatAnthropic({
                 apiKey: apiKey,
-                modelName: "claude-3-5-sonnet-20240620",
+                model: "claude-3-5-sonnet-20240620",
                 temperature: 0.3,
             }),
         };
@@ -23,7 +23,7 @@ function getModelDetails(apiKey: string): { provider: string; modelName: string;
             modelName: "gpt-4.1",
             chatModel: new ChatOpenAI({
                 apiKey: apiKey,
-                modelName: "gpt-4.1",
+                model: "gpt-4.1",
                 temperature: 0.3,
             }),
         };
@@ -33,7 +33,7 @@ function getModelDetails(apiKey: string): { provider: string; modelName: string;
             modelName: "gemini-2.0-flash",
             chatModel: new ChatGoogleGenerativeAI({
                 apiKey: apiKey,
-            model: "gemini-2.0-flash",
+                model: "gemini-2.0-flash",
                 temperature: 0.3,
             }),
         };
@@ -52,6 +52,7 @@ You are an expert AI assistant that generates graph structures for a workflow au
 Your task is to create a JSON object representing a graph of nodes and edges based on the user's description of an agent or workflow. The graph will be used to render a diagram in a ReactFlow canvas.
 
 **Instructions:**
+- The generated graph must always include an input node (type 'customInput') and an output node (type 'customOutput'), regardless of the workflow.
 - Decompose the user's workflow description into meaningful, actionable steps. Do not just create a literal input node for the user query. For example, if the user says "google meet transcript to slack message", generate a graph with steps like "fetch transcript from Google Meet" and "send message to Slack general channel" as agent nodes.
 - Use the 'customInput' node only for genuine user input that is required at the start of the workflow (e.g., a prompt, a file, or a value the user must provide). Do not use it as a placeholder for the entire workflow description.
 - For any step that requires LLM or tool/action usage, always use the 'agent' node. Do not use 'llm' or 'composio' nodes separately. All LLM/tool steps must be represented as 'agent' nodes only.
@@ -102,16 +103,15 @@ Keep the graph simple and logical. Usually 2-5 nodes are sufficient unless the w
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { useCase, llmApiKey, composioApiKey } = body.requestBody.useCase;
-
-        if (!useCase || !llmApiKey || !composioApiKey) {
-            return NextResponse.json({ error: "Missing useCase, llmApiKey, or composioApiKey" }, { status: 400 });
+        const { useCase, llmApiKey, composioApiKey } = body;
+        const modelDetails = getModelDetails(llmApiKey);
+        const { provider, modelName, chatModel } = modelDetails;
+        let usecaseResponse;
+        try {
+            usecaseResponse = await chatModel.invoke(`This is the use case the user wants to build an agent for: ${useCase}. Please generate a small, simple usecase string that describes the core action needed, if it involves multiple steps mention the name of the app and the step.`);
+        } catch (e: any) {
+            return NextResponse.json({ error: 'Error during LLM invoke', details: e?.message || e }, { status: 500 });
         }
-
-        const { provider, modelName, chatModel } = getModelDetails(llmApiKey);
-
-        // Fetch usecase and toolkit from LLM
-        const usecaseResponse = await chatModel.invoke(`This is the use case the user wants to build an agent for: ${useCase}. Please generate a small, simple usecase string that describes the core action needed, if it involves multiple steps mention the name of the app and the step.`)
 
         // Use structured output to get a list of app names (JSON Schema)
         const schema = {
@@ -141,7 +141,6 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({ 
                 use_case: usecaseResponse.content, 
-                //apps: apps,
                 min_actions_per_task: 0,
                 max_actions_per_task: 0,
                 limit: 0
@@ -190,18 +189,15 @@ export async function POST(request: NextRequest) {
         try {
             graph = JSON.parse(graphJsonString);
         } catch (e: any) {
-            console.error('[chat-to-agent] Failed to parse LLM response as JSON');
             return NextResponse.json({ error: "Failed to parse LLM response as JSON.", llmOutput: graphJsonString }, { status: 500 });
         }
 
         if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
-            console.error('[chat-to-agent] Invalid graph structure received from LLM');
             return NextResponse.json({ error: "LLM returned invalid graph structure (missing nodes or edges array).", llmOutput: graph }, { status: 500 });
         }
         return NextResponse.json(graph);
 
     } catch (error: any) {
-        console.error('[chat-to-agent] Error processing request');
         return NextResponse.json({ error: error.message || "An unexpected error occurred." }, { status: 500 });
     }
 }
