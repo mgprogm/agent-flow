@@ -59,7 +59,9 @@ const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, on
       border: '1px solid rgba(255, 245, 245, 0.1)',
       borderRadius: '0.5rem',
       boxShadow: '0 4px 24px -1px rgba(0, 0, 0, 0.2)',
-      width: '16rem',
+      minWidth: '14rem',
+      maxWidth: '36rem',
+      width: 'fit-content',
       color: '#fff5f5'
     }}>
       <div style={{

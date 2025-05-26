@@ -71,7 +71,9 @@ const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenTo
         border: '1px solid rgba(180, 245, 245, 0.2)',
         borderRadius: '0.5rem',
         boxShadow: '0 4px 24px -1px rgba(0, 0, 0, 0.2)',
-        width: '20rem',
+        minWidth: '16rem',
+        maxWidth: '40rem',
+        width: 'fit-content',
         color: '#cbfcfc',
         fontSize: '0.85rem',
       }}>

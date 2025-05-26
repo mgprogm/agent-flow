@@ -33,7 +33,7 @@ function getModelDetails(apiKey: string): { provider: string; modelName: string;
             modelName: "gemini-2.0-flash",
             chatModel: new ChatGoogleGenerativeAI({
                 apiKey: apiKey,
-                model: "gemini-2.0-flash",
+            model: "gemini-2.0-flash",
                 temperature: 0.3,
             }),
         };
@@ -52,23 +52,31 @@ You are an expert AI assistant that generates graph structures for a workflow au
 Your task is to create a JSON object representing a graph of nodes and edges based on the user's description of an agent or workflow. The graph will be used to render a diagram in a ReactFlow canvas.
 
 **Instructions:**
-- Use only the tools and actions provided in the following list. Do not invent or use any other tools or actions.
-- For any agent or composio node that needs to use actions, include a field called 'allowedTools' in its data, which is a single comma-separated string of the action names from the 'actions' array of the relevant app(s) below. For example: 'allowedTools': 'ACTION_1,ACTION_2'.
+- Decompose the user's workflow description into meaningful, actionable steps. Do not just create a literal input node for the user query. For example, if the user says "google meet transcript to slack message", generate a graph with steps like "fetch transcript from Google Meet" and "send message to Slack general channel" as agent nodes.
+- Use the 'customInput' node only for genuine user input that is required at the start of the workflow (e.g., a prompt, a file, or a value the user must provide). Do not use it as a placeholder for the entire workflow description.
+- For any step that requires LLM or tool/action usage, always use the 'agent' node. Do not use 'llm' or 'composio' nodes separately. All LLM/tool steps must be represented as 'agent' nodes only.
+- For any agent node that needs to use actions, include a field called 'allowedTools' in its data, which is a single comma-separated string of the action names from the 'actions' array of the relevant app(s) below. For example: 'allowedTools': 'ACTION_1,ACTION_2'.
 - Do not invent actions; always use the provided actions.
 
 **Available Tools and Actions:**
 ${tools.map(t => `- App: ${t.app}\n  Actions: ${t.actions.join(', ')}\n  Description: ${t.description || ''}`).join('\n')}
 
+**Workflow Patterns:**
+You can generate a variety of agentic workflow patterns, not just simple input-agent-output. Some common patterns include:
+- **Prompt Chaining:** Sequential steps where the output of one agent is used as input for the next.
+- **Parallelisation:** Multiple agents or actions run in parallel, then their results are aggregated.
+- **Routing:** A router agent decides which branch or agent to send the input to, based on logic or input.
+- **Evaluator-Optimiser:** A generator agent produces solutions, an evaluator agent checks them, and the process loops until a good solution is found.
+- **Augmented LLM:** An agent node is augmented with tool calls or external data fetching.
+
+Choose the most appropriate pattern for the user's use case. If the user specifies a pattern, follow it. If not, select the best fit based on the use case. If the use case is ambiguous, you may ask the user for clarification or suggest a pattern.
+
 **Node Types and Data:**
-1. 'customInput': Starting point.
+1. 'customInput': Starting point for genuine user input (not a placeholder for the workflow).
    - data: { label: string, query: string }
-2. 'llm': LLM call.
-   - data: { label: string, systemPrompt: string, apiKey: "${llmApiKey}", modelProvider: "${llmProvider}", modelName: "${llmModelName}" }
-3. 'agent': Autonomous agent with LLM and tool access.
+2. 'agent': Autonomous agent with LLM and tool access.
    - data: { label: string, systemPrompt: string, llmApiKey: "${llmApiKey}", modelProvider: "${llmProvider}", modelName: "${llmModelName}", composioApiKey: "${composioApiKey}", allowedTools: "ACTION_1,ACTION_2" }
-4. 'composio': Specific action/tool call.
-   - data: { label: string, composioApiKey: "${composioApiKey}", allowedTools: "ACTION_1,ACTION_2" }
-5. 'customOutput': End point.
+3. 'customOutput': End point.
    - data: { label: string }
 
 **Node Structure:**
@@ -78,13 +86,13 @@ Each node: { "id": string, "type": string, "position": { "x": number, "y": numbe
 Each edge: { "id": string, "source": string, "target": string }
 
 **Workflow Logic:**
-- Start with a 'customInput' node and end with one or more 'customOutput' nodes.
-- Use 'agent' nodes for steps that require multiple or complex tool use, and 'composio' nodes for direct/single actions. Always include the allowedTools string in their data.
-- Use 'llm' nodes for generic language processing (no tools).
-- Generate clear, descriptive labels.
+- Start with a 'customInput' node only if genuine user input is needed, then proceed to agent nodes for each actionable step.
+- Use 'agent' nodes for all steps that require LLM or tool/action usage. Do not use 'llm' or 'composio' nodes.
+- Generate clear, descriptive labels (use user-provided names if available).
 - Use only the tools/actions you have access to from the provided list.
+- You may use branching, parallel, or looping structures as needed to fit the pattern.
 
-Node IDs: Use a simple scheme like "input_1", "llm_1", "agent_1", "composio_1", "output_1".
+Node IDs: Use a simple scheme like "input_1", "agent_1", "output_1".
 
 Your output MUST be a single valid JSON object with "nodes" and "edges" arrays. Do not include any other text or explanations outside the JSON structure.
 Keep the graph simple and logical. Usually 2-5 nodes are sufficient unless the workflow is complex.
@@ -103,7 +111,7 @@ export async function POST(request: NextRequest) {
         const { provider, modelName, chatModel } = getModelDetails(llmApiKey);
 
         // Fetch usecase and toolkit from LLM
-        const usecaseResponse = await chatModel.invoke(`This is the use case the user wants to build an agent for: ${useCase}. Please generate a small, simple usecase string that describes the core action needed.`)
+        const usecaseResponse = await chatModel.invoke(`This is the use case the user wants to build an agent for: ${useCase}. Please generate a small, simple usecase string that describes the core action needed, if it involves multiple steps mention the name of the app and the step.`)
 
         // Use structured output to get a list of app names (JSON Schema)
         const schema = {
@@ -133,7 +141,7 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({ 
                 use_case: usecaseResponse.content, 
-                apps: apps,
+                //apps: apps,
                 min_actions_per_task: 0,
                 max_actions_per_task: 0,
                 limit: 0
