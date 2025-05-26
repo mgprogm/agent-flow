@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       authScheme,
       credentials,
     });
-    const connectionRequest = await composio.createConnectedAccount('default', authConfig.id);
+    const connectionRequest = await composio.createConnectedAccount('user123', authConfig.id);
     const connectedAccountId = connectionRequest['connectedAccountId'];
     const connectedAccount = await composio.connectedAccounts.get(connectedAccountId);
     if (authScheme === 'OAUTH2') {
