@@ -184,6 +184,26 @@ const allSidebarItems = [
 
   const [runJoyride, setRunJoyride] = useState(false);
 
+  const onNodeDataChange = useCallback(
+    (id: string, newData: Partial<InputNodeData | LLMNodeData | ComposioNodeData | AgentNodeData>) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === id ? { ...node, data: { ...node.data, ...newData } } : node
+        )
+      );
+    },
+    [setNodes]
+  );
+
+  const nodeTypes: NodeTypes = useMemo(() => ({
+    customInput: (props) => <InputNode {...props} data={{...props.data, onNodeDataChange: onNodeDataChange as any }} />,
+    customOutput: OutputNode,
+    llm: (props) => <LLMNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any}} onCopyApiKeyToAllLLMs={(apiKey) => setNodes(nds => nds.map(n => n.type === 'llm' ? { ...n, data: { ...n.data, apiKey } } : n))} />,
+    composio: (props) => <ComposioNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllComposioNodes={(apiKey) => setNodes(nds => nds.map(n => n.type === 'composio' ? { ...n, data: { ...n.data, composioApiKey: apiKey } } : n))} />,
+    agent: (props) => <AgentNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllAgents={(apiKey) => setNodes(nds => nds.map(n => n.type === 'agent' ? { ...n, data: { ...n.data, llmApiKey: apiKey } } : n))} />,
+    patternMeta: PatternMetaNode,
+  }), [onNodeDataChange, setNodes]);
+
   const edgeTypes = useMemo(() => ({
     flowing: FlowingEdge,
   }), []);
@@ -287,26 +307,6 @@ const allSidebarItems = [
     };
     updateFlow();
   }, [nodes, edges, flowId, initialNodesLoaded, initialEdgesLoaded]);
-
-  const onNodeDataChange = useCallback(
-    (id: string, newData: Partial<InputNodeData | LLMNodeData | ComposioNodeData | AgentNodeData>) => {
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === id ? { ...node, data: { ...node.data, ...newData } } : node
-        )
-      );
-    },
-    [setNodes]
-  );
-
-  const nodeTypes: NodeTypes = useMemo(() => ({
-    customInput: (props) => <InputNode {...props} data={{...props.data, onNodeDataChange: onNodeDataChange as any }} />,
-    customOutput: OutputNode,
-    llm: (props) => <LLMNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any}} onCopyApiKeyToAllLLMs={(apiKey) => setNodes(nds => nds.map(n => n.type === 'llm' ? { ...n, data: { ...n.data, apiKey } } : n))} />,
-    composio: (props) => <ComposioNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllComposioNodes={(apiKey) => setNodes(nds => nds.map(n => n.type === 'composio' ? { ...n, data: { ...n.data, composioApiKey: apiKey } } : n))} />,
-    agent: (props) => <AgentNode {...props} data={{ ...props.data, onNodeDataChange: onNodeDataChange as any }} onOpenToolsWindow={() => setToolsWindowOpen(true)} onCopyApiKeyToAllAgents={(apiKey) => setNodes(nds => nds.map(n => n.type === 'agent' ? { ...n, data: { ...n.data, llmApiKey: apiKey } } : n))} />,
-    patternMeta: PatternMetaNode,
-  }), [onNodeDataChange, setNodes]);
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -478,8 +478,8 @@ const allSidebarItems = [
       const patternType = event.dataTransfer.getData('application/pattern');
       if (patternType) {
         const position: XYPosition = rfInstance.screenToFlowPosition({
-          x: event.clientX - 288,
-          y: event.clientY - 64,
+          x: event.clientX,
+          y: event.clientY,
         });
         if (dropAsMetaNode) {
           // Insert a PatternMetaNode
@@ -524,8 +524,8 @@ const allSidebarItems = [
       const initialNodeData = JSON.parse(initialNodeDataJSON || '{}');
       if (typeof type === 'undefined' || !type) return;
       const position: XYPosition = rfInstance.screenToFlowPosition({
-        x: event.clientX - 288,
-        y: event.clientY - 64,
+        x: event.clientX,
+        y: event.clientY,
       });
       let nodeData: any = { ...initialNodeData };
       if (type === 'customInput' || type === 'llm' || type === 'composio') {
@@ -1198,6 +1198,13 @@ const allSidebarItems = [
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
+            defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
+            panOnScroll={true}
+            selectionOnDrag={true}
+            panOnDrag={[1, 2]}
+            selectionMode={SelectionMode.Partial}
+            snapToGrid={true}
+            snapGrid={[20, 20]}
             style={{ background: 'transparent' }}
             className="relative z-10"
             defaultEdgeOptions={{
@@ -1209,7 +1216,6 @@ const allSidebarItems = [
             onPaneClick={onPaneClick}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
-            selectionMode={SelectionMode.Partial}
             onSelectionChange={onSelectionChange}
           >
             <Controls />
