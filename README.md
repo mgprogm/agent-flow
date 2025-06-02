@@ -2,6 +2,8 @@
 
 Agent Flow is a modular, extensible agent platform inspired by modern no-code and agent orchestration tools, built with Composio and LanggraphJS. It enables developers to rapidly build, customize, and extend AI-powered workflows using a visual node-based interface and robust API. The platform is designed for flexibility, developer experience, and seamless integration with third-party tools.
 
+[Watch the Agent Flow demo video](agent_flow_web.mp4)
+
 ## Key Features
 
 - **Visual Workflow Builder:** Drag-and-drop interface using ReactFlow for creating agent graphs (nodes and edges)
@@ -63,12 +65,11 @@ Agent Flow is a modular, extensible agent platform inspired by modern no-code an
 - `app/` – Main application code (pages, api routes)
 - `components/` - Components code
 - `public/` – Static assets
-- `styles/` – Global styles (Tailwind, etc.)
 - `README.md` – Project documentation
 
 ## Extending the Platform
 
-- **Add new nodes:** Create new node types in the `app/` directory and register them in the workflow builder.   
+- **Add new nodes:** Create new node types in the `components/` directory and register them in the workflow builder.   
 - **Authentication:** Composio handles OAuth, API keys, and other auth flows automatically via a unified modal.
 
 ## Contributing
