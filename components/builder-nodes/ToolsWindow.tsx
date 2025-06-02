@@ -14,6 +14,7 @@ interface Tool {
   description?: string;
   authConfigMode?: string[];
   composioManagedAuthConfigs?: string[];
+  noAuth?: boolean;
 }
 
 interface Action {
@@ -418,6 +419,13 @@ const ToolsWindow: React.FC<ToolsWindowProps> = ({ onClose, onConnect, onSelectT
                         <div className="px-6 py-3 rounded-lg border font-medium bg-green-600 border-green-700 text-white shadow-md backdrop-blur-md whitespace-nowrap flex items-center justify-center">
                           Connected
                         </div>
+                      ) : selectedTool?.noAuth ? (
+                        <button
+                          className="px-6 py-3 rounded-lg border font-medium bg-gray-500 border-gray-600 text-white shadow-md backdrop-blur-md whitespace-nowrap cursor-not-allowed opacity-60"
+                          disabled
+                        >
+                          No Auth Needed
+                        </button>
                       ) : (
                         <button
                           onClick={handleConnectClick}

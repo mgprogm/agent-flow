@@ -48,23 +48,11 @@ Agent Flow is a modular, extensible agent platform inspired by modern no-code an
 1. **Install dependencies:**
    ```bash
    npm install
-   # or
-yarn
-   # or
-pnpm install
-   # or
-bun install
    ```
 
 2. **Run the development server:**
    ```bash
    npm run dev
-   # or
-yarn dev
-   # or
-pnpm dev
-   # or
-bun dev
    ```
 
 3. **Open your browser:**
