@@ -11,7 +11,7 @@ export interface ComposioNodeData {
 }
 
 interface ComposioNodeProps extends NodeProps<ComposioNodeData> {
-  onOpenToolsWindow?: () => void;
+  onOpenToolsWindow?: (apiKey?: string) => void;
   onCopyApiKeyToAllComposioNodes?: (apiKey: string) => void;
 }
 
@@ -26,10 +26,18 @@ const toolkitOptions = [
 
 const ComposioNode: React.FC<ComposioNodeProps & { _forceRerender?: number }> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyApiKeyToAllComposioNodes, _forceRerender }) => {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [localComposioApiKey, setLocalComposioApiKey] = useState(data.composioApiKey || '');
   const selectedActionsList = (data.toolActions || '').split(',').map(t => t.trim()).filter(Boolean);
+
+  useEffect(() => {
+    setLocalComposioApiKey(data.composioApiKey || '');
+  }, [data.composioApiKey]);
 
   const handleNodeConfigChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
+    if (name === 'composioApiKey') {
+      setLocalComposioApiKey(value);
+    }
     if (data.onNodeDataChange) data.onNodeDataChange(id, { [name]: value });
   };
 
@@ -102,7 +110,7 @@ const ComposioNode: React.FC<ComposioNodeProps & { _forceRerender?: number }> = 
               id={`composioApiKey-${id}`}
               type="password"
               name="composioApiKey"
-              value={data.composioApiKey || ''}
+              value={localComposioApiKey}
               onChange={handleNodeConfigChange}
               onPaste={e => { e.stopPropagation(); }}
               style={inputStyle}
@@ -168,7 +176,10 @@ const ComposioNode: React.FC<ComposioNodeProps & { _forceRerender?: number }> = 
               <div
                 className="px-3 py-2 cursor-pointer hover:bg-[#cbfcfc22] text-[#cbfcfc] font-medium border-b border-[#cbfcfc33]"
                 onClick={() => {
-                  if (onOpenToolsWindow) onOpenToolsWindow();
+                  if (data.composioApiKey !== localComposioApiKey && data.onNodeDataChange) {
+                    data.onNodeDataChange(id, { composioApiKey: localComposioApiKey });
+                  }
+                  if (onOpenToolsWindow) onOpenToolsWindow(localComposioApiKey);
                   setShowDropdown(false);
                 }}
               >

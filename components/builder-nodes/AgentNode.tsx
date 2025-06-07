@@ -24,7 +24,7 @@ export interface AgentNodeData {
 }
 
 interface AgentNodeProps extends NodeProps<AgentNodeData> {
-  onOpenToolsWindow?: () => void;
+  onOpenToolsWindow?: (composioApiKey?: string) => void;
   onCopyFieldToAll?: (field: string, value: string) => void;
   onCopyApiKeyToAllAgents?: (apiKey: string) => void;
 }
@@ -33,6 +33,11 @@ const AgentNode: React.FC<AgentNodeProps & { _forceRerender?: number }> = ({ id,
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedActionsList = (data.allowedTools || '').split(',').map(t => t.trim()).filter(Boolean);
+  const [localComposioApiKey, setLocalComposioApiKey] = useState(data.composioApiKey || '');
+
+  useEffect(() => {
+    setLocalComposioApiKey(data.composioApiKey || '');
+  }, [data.composioApiKey]);
 
   const handleNodeConfigChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
@@ -41,7 +46,12 @@ const AgentNode: React.FC<AgentNodeProps & { _forceRerender?: number }> = ({ id,
       const newProvider = value as keyof typeof modelOptions;
       newData.modelName = modelOptions[newProvider]?.[0] || undefined;
     }
-    if (data.onNodeDataChange) data.onNodeDataChange(id, newData);
+    if (name === 'composioApiKey') {
+      setLocalComposioApiKey(value);
+    }
+    if (data.onNodeDataChange) {
+      data.onNodeDataChange(id, newData);
+    }
   };
 
   useEffect(() => {
@@ -225,7 +235,7 @@ const AgentNode: React.FC<AgentNodeProps & { _forceRerender?: number }> = ({ id,
                 id={`composioApiKey-${id}`}
                 type="password"
                 name="composioApiKey"
-                value={data.composioApiKey || ''}
+                value={localComposioApiKey}
                 onChange={handleNodeConfigChange}
                 onPaste={e => { e.stopPropagation(); }}
                 style={inputStyle}
@@ -266,7 +276,12 @@ const AgentNode: React.FC<AgentNodeProps & { _forceRerender?: number }> = ({ id,
                   <div
                     className="px-3 py-2 cursor-pointer hover:bg-[#cbfcfc22] text-[#cbfcfc] font-medium border-b border-[#cbfcfc33]"
                     onClick={() => {
-                      if (onOpenToolsWindow) onOpenToolsWindow();
+                      if (data.composioApiKey !== localComposioApiKey && data.onNodeDataChange) {
+                        data.onNodeDataChange(id, { composioApiKey: localComposioApiKey });
+                      }
+                      if (onOpenToolsWindow) {
+                        onOpenToolsWindow(localComposioApiKey);
+                      }
                       setShowDropdown(false);
                     }}
                   >
