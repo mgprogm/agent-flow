@@ -188,7 +188,7 @@ const allSidebarItems = [
     (id: string, newData: Partial<InputNodeData | LLMNodeData | ComposioNodeData | AgentNodeData>) => {
       setNodes((nds) =>
         nds.map((node) =>
-          node.id === id ? { ...node, data: { ...node.data, ...newData } } : node
+          node.id === id ? { ...node, data: { ...node.data, ...newData, _forceRerender: Math.random() } } : node
         )
       );
     },

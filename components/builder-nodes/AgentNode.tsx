@@ -29,7 +29,7 @@ interface AgentNodeProps extends NodeProps<AgentNodeData> {
   onCopyApiKeyToAllAgents?: (apiKey: string) => void;
 }
 
-const AgentNode: React.FC<AgentNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyFieldToAll, onCopyApiKeyToAllAgents }) => {
+const AgentNode: React.FC<AgentNodeProps & { _forceRerender?: number }> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyFieldToAll, onCopyApiKeyToAllAgents, _forceRerender }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedActionsList = (data.allowedTools || '').split(',').map(t => t.trim()).filter(Boolean);

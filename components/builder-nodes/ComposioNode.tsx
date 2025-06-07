@@ -24,7 +24,7 @@ const toolkitOptions = [
   // Add more toolkits as needed
 ];
 
-const ComposioNode: React.FC<ComposioNodeProps> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyApiKeyToAllComposioNodes }) => {
+const ComposioNode: React.FC<ComposioNodeProps & { _forceRerender?: number }> = ({ id, data, isConnectable, onOpenToolsWindow, onCopyApiKeyToAllComposioNodes, _forceRerender }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const selectedActionsList = (data.toolActions || '').split(',').map(t => t.trim()).filter(Boolean);
 
