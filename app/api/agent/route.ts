@@ -4,6 +4,8 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { z } from "zod";
 import { AIMessage, HumanMessage, ToolMessage, BaseMessage, SystemMessage } from "@langchain/core/messages";
+import { StateGraph, START, END } from "@langchain/langgraph";
+import { Annotation } from "@langchain/langgraph";
 
 import { AuthConfigTypes, AuthSchemeTypes, Composio, } from "@composio/core";
 import {LangchainToolset} from '@composio/langchain'
@@ -15,89 +17,102 @@ const AgentRequestBodySchema = z.object({
   }),
 });
 
-async function executeGraphSequentially(
-  graphJson: { nodes: any[]; edges: any[] }
-): Promise<{ response: string; steps: string[] }> {
-    console.log("[Graph Executor] Starting sequential execution.");
-    const { nodes, edges } = graphJson;
-    const steps: string[] = [];
+const GraphState = Annotation.Root({
+  currentData: Annotation<any>(),
+  originalQuery: Annotation<string>(),
+  graphNodes: Annotation<any[]>(),
+  graphEdges: Annotation<any[]>(),
+  steps: Annotation<string[]>(),
+  currentNodeId: Annotation<string | null>(),
+  executionComplete: Annotation<boolean>()
+});
 
-    const startNode = nodes.find(n => n.type === 'customInput');
-    if (!startNode) throw new Error("Graph must contain a 'customInput' node.");
-    if (!startNode.data?.query?.trim()) throw new Error("'customInput' node must contain a non-empty query.");
+type GraphStateType = typeof GraphState.State;
 
-    const originalQuery = startNode.data.query; 
-    let currentNodeId = startNode.id;
-    let lastOutputData: any = originalQuery; 
-    steps.push(`Start: Initial query = "${originalQuery}"`);
+async function executeInput(state: GraphStateType): Promise<Partial<GraphStateType>> {
+  console.log("[LangGraph] Executing input node");
+  
+  const startNode = state.graphNodes.find(n => n.type === 'customInput');
+  if (!startNode) throw new Error("Graph must contain a 'customInput' node.");
+  if (!startNode.data?.query?.trim()) throw new Error("'customInput' node must contain a non-empty query.");
 
-    const visitedNodes = new Set<string>();
+  const originalQuery = startNode.data.query;
+  const steps = [...state.steps, `Start: Initial query = "${originalQuery}"`];
+  
+  const outgoingEdge = state.graphEdges.find(edge => edge.source === startNode.id);
+  const nextNodeId = outgoingEdge?.target || null;
+  
+  return {
+    currentData: originalQuery,
+    originalQuery,
+    steps,
+    currentNodeId: nextNodeId
+  };
+}
 
-    while (currentNodeId && !visitedNodes.has(currentNodeId)) {
-        visitedNodes.add(currentNodeId);
-        const currentNode = nodes.find(n => n.id === currentNodeId);
-        if (!currentNode) throw new Error(`Node with ID ${currentNodeId} not found in graph.`);
+async function executeLLM(state: GraphStateType): Promise<Partial<GraphStateType>> {
+  console.log("[LangGraph] Executing LLM node");
+  
+  const currentNode = state.graphNodes.find(n => n.id === state.currentNodeId);
+  if (!currentNode) throw new Error(`LLM Node with ID ${state.currentNodeId} not found`);
 
-        console.log(`[Graph Executor] Executing Node ${currentNode.id} (Type: ${currentNode.type}) with input:`, typeof lastOutputData === 'string' ? lastOutputData.substring(0, 100) + '...' : lastOutputData);
-        steps.push(`Executing: Node ${currentNode.id} (Type: ${currentNode.type})`);
+  const { apiKey, systemPrompt: nodeSystemPrompt, modelProvider, modelName } = currentNode.data;
+  if (!apiKey) throw new Error(`LLM Node ${currentNode.id} requires an apiKey.`);
 
-        let outputData: any = null;
+  let llm;
+  switch (modelProvider) {
+    case 'anthropic': llm = new ChatAnthropic({ apiKey, temperature: 0.7, modelName }); break;
+    case 'google': llm = new ChatGoogleGenerativeAI({ apiKey, temperature: 0.7, model: modelName }); break;
+    case 'openai': default: llm = new ChatOpenAI({ apiKey, temperature: 0.7, modelName }); break;
+  }
+  
+  const contextSystemPrompt = `Final Goal: ${state.originalQuery}\n\nCurrent Status/Input: ${String(state.currentData)}`;
+  const combinedSystemPrompt = `${contextSystemPrompt}\n\n${nodeSystemPrompt || ''}`.trim();
 
-        switch (currentNode.type) {
-            case 'customInput':
-                outputData = lastOutputData; 
-                break;
+  const messages: BaseMessage[] = [
+    new SystemMessage(combinedSystemPrompt),
+    new HumanMessage(String(state.currentData))
+  ];
 
-            case 'llm': {
-                console.log("[Graph Executor] Handling LLM Node:", currentNode.data);
-                const { apiKey, systemPrompt: nodeSystemPrompt, modelProvider, modelName } = currentNode.data;
-                if (!apiKey) throw new Error(`LLM Node ${currentNode.id} requires an apiKey.`);
+  console.log(`[LLM Node ${currentNode.id}] Invoking LLM with System Prompt: "${combinedSystemPrompt}"`);
+  const response = await llm.invoke(messages);
+  
+  const steps = [...state.steps, `Result (LLM ${currentNode.id}): ${typeof response.content === 'string' ? response.content.substring(0,100)+'...' : JSON.stringify(response.content)}`];
+  
+  const outgoingEdge = state.graphEdges.find(edge => edge.source === currentNode.id);
+  const nextNodeId = outgoingEdge?.target || null;
+  
+  return {
+    currentData: response.content,
+    steps,
+    currentNodeId: nextNodeId
+  };
+}
 
-                let llm;
-                 switch (modelProvider) {
-                      case 'anthropic': llm = new ChatAnthropic({ apiKey, temperature: 0.7, modelName }); break;
-                      case 'google': llm = new ChatGoogleGenerativeAI({ apiKey, temperature: 0.7, model: modelName }); break;
-                      case 'openai': default: llm = new ChatOpenAI({ apiKey, temperature: 0.7, modelName }); break;
-                  }
-                  console.log(`[LLM Node ${currentNode.id}] Instantiated ${modelProvider} model.`);
+async function executeAgent(state: GraphStateType): Promise<Partial<GraphStateType>> {
+  console.log("[LangGraph] Executing Agent node");
+  
+  const currentNode = state.graphNodes.find(n => n.id === state.currentNodeId);
+  if (!currentNode) throw new Error(`Agent Node with ID ${state.currentNodeId} not found`);
 
-                const contextSystemPrompt = `Final Goal: ${originalQuery}\n\nCurrent Status/Input: ${String(lastOutputData)}`;
-                const combinedSystemPrompt = `${contextSystemPrompt}\n\n${nodeSystemPrompt || ''}`.trim();
+  const {
+    llmApiKey, systemPrompt: nodeSystemPrompt, modelProvider, modelName,
+    composioApiKey, allowedTools: allowedToolsString,
+  } = currentNode.data;
 
-                const messages: BaseMessage[] = [
-                    new SystemMessage(combinedSystemPrompt),
-                    new HumanMessage(String(lastOutputData))
-                ];
+  if (!llmApiKey) throw new Error(`Agent Node ${currentNode.id} requires an llmApiKey.`);
 
-                 console.log(`[LLM Node ${currentNode.id}] Invoking LLM with System Prompt: "${combinedSystemPrompt}" and Human Message: "${String(lastOutputData).substring(0,100)}..."`);
-                const response = await llm.invoke(messages);
-                 console.log(`[LLM Node ${currentNode.id}] LLM Response:`, response);
-                outputData = response.content;
-                steps.push(`Result (LLM ${currentNode.id}): ${typeof outputData === 'string' ? outputData.substring(0,100)+'...' : JSON.stringify(outputData)}`);
-                break;
-            }
+  let agentLlm;
+  switch (modelProvider) {
+    case 'anthropic': agentLlm = new ChatAnthropic({ apiKey: llmApiKey, temperature: 0.7, modelName }); break;
+    case 'google': agentLlm = new ChatGoogleGenerativeAI({ apiKey: llmApiKey, temperature: 0.7, model: modelName }); break;
+    case 'openai': default: agentLlm = new ChatOpenAI({ apiKey: llmApiKey, temperature: 0.7, modelName }); break;
+  }
 
-            case 'agent': {
-                 console.log("[Graph Executor] Handling Agent Node:", currentNode.data);
-                 const {
-                     llmApiKey, systemPrompt: nodeSystemPrompt, modelProvider, modelName,
-                     composioApiKey, allowedTools: allowedToolsString,
-                 } = currentNode.data;
+  let toolsForAgent: any[] = [];
+  const allowedTools = (allowedToolsString || '').split(',').map((t: string) => t.trim()).filter((t: string) => t);
 
-                 if (!llmApiKey) throw new Error(`Agent Node ${currentNode.id} requires an llmApiKey.`);
-
-                 let agentLlm;
-                 switch (modelProvider) {
-                    case 'anthropic': agentLlm = new ChatAnthropic({ apiKey: llmApiKey, temperature: 0.7, modelName }); break;
-                    case 'google': agentLlm = new ChatGoogleGenerativeAI({ apiKey: llmApiKey, temperature: 0.7, model: modelName }); break;
-                    case 'openai': default: agentLlm = new ChatOpenAI({ apiKey: llmApiKey, temperature: 0.7, modelName }); break;
-                 }
-                 console.log(`[Agent Node ${currentNode.id}] Instantiated ${modelProvider} model.`);
-
-                 let toolsForAgent: any[] = [];
-                 const allowedTools = (allowedToolsString || '').split(',').map((t: string) => t.trim()).filter((t: string) => t);
-
-                 if (composioApiKey && allowedTools.length > 0) {
+  if (composioApiKey && allowedTools.length > 0) {
     try {
       const composio = new Composio({
         apiKey: composioApiKey, 
@@ -108,179 +123,193 @@ async function executeGraphSequentially(
       console.log(`[Agent Node ${currentNode.id}] Loaded ${toolsForAgent.length} tools.`);
     } catch (error: any) {
       console.error(`[Agent Node ${currentNode.id}] Failed to load tools:`, error);
-      steps.push(`Warning (Agent ${currentNode.id}): Failed to load tools - ${error.message}`);
     }
-  } else {
-    console.log(`[Agent Node ${currentNode.id}] No Composio API key or tools specified.`);
-                 }
-
-                 const modelWithTools = agentLlm.bindTools(toolsForAgent);
-
-                 const contextSystemPrompt = `Final Goal: ${originalQuery}\n\nCurrent Status/Input: ${String(lastOutputData)}`;
-                 const combinedSystemPrompt = `${contextSystemPrompt}\n\n${nodeSystemPrompt || ''}`.trim();
-
-                 let agentMessages: BaseMessage[] = [
-                     new SystemMessage(combinedSystemPrompt),
-                     new HumanMessage(String(lastOutputData))
-                 ];
-
-                 let finalAgentOutput: any = null;
-                 const maxTurns = 5; 
-                 let turns = 0;
-
-                 while (turns < maxTurns) {
-                     turns++;
-                     console.log(`[Agent Node ${currentNode.id}] Invoking Agent LLM (Turn ${turns}). System Prompt: "${combinedSystemPrompt}". Current Messages:`, agentMessages.slice(1)); // Log messages excluding system prompt for brevity
-                     steps.push(`Agent ${currentNode.id} Turn ${turns}: Calling LLM`);
-
-                     const response: AIMessage = await modelWithTools.invoke(agentMessages); 
-                     console.log(`[Agent Node ${currentNode.id}] Raw Agent Response (Turn ${turns}):`, response);
-                     agentMessages.push(response); 
-
-                     const toolCalls = response.additional_kwargs?.tool_calls;
-                     if (toolCalls && toolCalls.length > 0 && toolsForAgent.length > 0) {
-                         console.log(`[Agent Node ${currentNode.id}] LLM requested tool calls:`, toolCalls);
-                         steps.push(`Agent ${currentNode.id} Turn ${turns}: LLM requested tools: ${toolCalls.map((tc: any) => tc.function.name).join(', ')}`);
-
-                         const toolMessages: ToolMessage[] = [];
-                         await Promise.all(toolCalls.map(async (toolCall: any) => {
-                             const toolToCall = toolsForAgent.find((tool) => tool.name === toolCall.function.name);
-                             let toolOutputContent: any;
-                             let toolCallSuccessful = false;
-
-                             if (toolToCall) {
-                                 try {
-                                     console.log(`[Agent Node ${currentNode.id}] Executing tool: ${toolCall.function.name} with args:`, toolCall.function.arguments);
-                                     let args = {};
-                                     try {
-                                        args = JSON.parse(toolCall.function.arguments || '{}');
-                                     } catch (parseError) {
-                                         console.error(`[Agent Node ${currentNode.id}] Failed to parse args for ${toolCall.function.name}:`, parseError);
-                                         throw new Error(`Invalid arguments format: ${toolCall.function.arguments}`);
-                                     }
-                                     toolOutputContent = await toolToCall.invoke(args);
-                                     toolCallSuccessful = true;
-                                     console.log(`[Agent Node ${currentNode.id}] Tool ${toolCall.function.name} output:`, toolOutputContent);
-                                     steps.push(`Agent ${currentNode.id} Turn ${turns}: Executed ${toolCall.function.name}. Result: ${JSON.stringify(toolOutputContent).substring(0,100)}...`);
-                                 } catch (toolError: any) {
-                                     console.error(`[Agent Node ${currentNode.id}] Error executing tool ${toolCall.function.name}:`, toolError);
-                                     toolOutputContent = `Error executing tool: ${toolError.message}`;
-                                     steps.push(`Agent ${currentNode.id} Turn ${turns}: Error executing ${toolCall.function.name}: ${toolError.message}`);
-                                 }
-                             } else {
-                                  console.error(`[Agent Node ${currentNode.id}] Tool ${toolCall.function.name} requested but not found/loaded.`);
-                                  toolOutputContent = `Error: Tool \"${toolCall.function.name}\" not found.`;
-                                  steps.push(`Agent ${currentNode.id} Turn ${turns}: Tool ${toolCall.function.name} not found.`);
-                             }
-                             toolMessages.push(new ToolMessage({
-                                 tool_call_id: toolCall.id!,
-                                 content: toolOutputContent,
-                                 name: toolCall.function.name 
-                             }));
-                         }));
-
-                         agentMessages = agentMessages.concat(toolMessages); 
-
-                     } else {
-                         finalAgentOutput = response.content;
-                         console.log(`[Agent Node ${currentNode.id}] Final Agent Response (Turn ${turns}):`, finalAgentOutput);
-                         steps.push(`Result (Agent ${currentNode.id}): ${typeof finalAgentOutput === 'string' ? finalAgentOutput.substring(0,100)+'...' : JSON.stringify(finalAgentOutput)}`);
-                         break; 
-                     }
-                 } 
-
-                 if (turns >= maxTurns && finalAgentOutput === null) {
-                     console.warn(`[Agent Node ${currentNode.id}] Reached max iterations (${maxTurns}) after tool calls.`);
-                     steps.push(`Warning (Agent ${currentNode.id}): Reached max iterations after tool calls.`);
-                     const lastMessage = agentMessages[agentMessages.length - 1];
-                     finalAgentOutput = lastMessage?.content ?? `Agent reached max iterations (${maxTurns}).`;
-                 }
-
-                 outputData = finalAgentOutput; 
-                 break;
-            } 
-
-
-            case 'customOutput':
-                outputData = lastOutputData; 
-                console.log(`[Graph Executor] Reached Output Node ${currentNode.id}. Final data:`, outputData);
-                steps.push(`Output: ${typeof outputData === 'string' ? outputData.substring(0,100)+'...' : JSON.stringify(outputData)}`);
-                currentNodeId = null; 
-          break;
-
-            case 'composio': 
-                 console.warn(`[Graph Executor] ComposioNode type execution not fully implemented in sequential model. Ignoring node ${currentNode.id}.`);
-                 outputData = lastOutputData; 
-                 steps.push(`Skipped (Composio ${currentNode.id}): Execution logic pending.`);
-          break;
-
-      default:
-                console.warn(`[Graph Executor] Unknown node type: ${currentNode.type}. Skipping node ${currentNode.id}.`);
-                outputData = lastOutputData; 
-                steps.push(`Skipped (Unknown Type ${currentNode.type} - ${currentNode.id})`);
-        }
-
-        if (currentNodeId) { 
-             const outgoingEdge = edges.find(edge => edge.source === currentNodeId);
-             if (outgoingEdge) {
-                 currentNodeId = outgoingEdge.target;
-                 lastOutputData = outputData;
-                 console.log(`[Graph Executor] Moving to next node: ${currentNodeId}`);
-             } else {
-                 console.log(`[Graph Executor] No outgoing edge found from node ${currentNodeId}. Ending execution.`);
-                 if(currentNode.type !== 'customOutput') {
-                     steps.push(`End: No outgoing edge from ${currentNode.id}`);
-                 }
-                 lastOutputData = outputData;
-                 currentNodeId = null;
-             }
-    } else {
-             lastOutputData = outputData; 
-         }
-    }
-
-    if (currentNodeId && visitedNodes.has(currentNodeId)) {
-        console.error("[Graph Executor] Error: Infinite loop detected.");
-        steps.push("Error: Infinite loop detected in graph.");
-        return { response: "Error: Infinite loop detected", steps };
   }
-  
-    console.log("[Graph Executor] Sequential execution finished.");
-    return { response: String(lastOutputData), steps };
+
+  const modelWithTools = agentLlm.bindTools(toolsForAgent);
+  const contextSystemPrompt = `Final Goal: ${state.originalQuery}\n\nCurrent Status/Input: ${String(state.currentData)}`;
+  const combinedSystemPrompt = `${contextSystemPrompt}\n\n${nodeSystemPrompt || ''}`.trim();
+
+  let agentMessages: BaseMessage[] = [
+    new SystemMessage(combinedSystemPrompt),
+    new HumanMessage(String(state.currentData))
+  ];
+
+  let finalAgentOutput: any = null;
+  let steps = [...state.steps];
+  const maxTurns = 5;
+  let turns = 0;
+
+  while (turns < maxTurns) {
+    turns++;
+    steps.push(`Agent ${currentNode.id} Turn ${turns}: Calling LLM`);
+
+    const response: AIMessage = await modelWithTools.invoke(agentMessages);
+    agentMessages.push(response);
+
+    const toolCalls = response.additional_kwargs?.tool_calls;
+    if (toolCalls && toolCalls.length > 0 && toolsForAgent.length > 0) {
+      steps.push(`Agent ${currentNode.id} Turn ${turns}: LLM requested tools: ${toolCalls.map((tc: any) => tc.function.name).join(', ')}`);
+
+      const toolMessages: ToolMessage[] = [];
+      await Promise.all(toolCalls.map(async (toolCall: any) => {
+        const toolToCall = toolsForAgent.find((tool) => tool.name === toolCall.function.name);
+        let toolOutputContent: any;
+
+        if (toolToCall) {
+          try {
+            let args = {};
+            try {
+              args = JSON.parse(toolCall.function.arguments || '{}');
+            } catch (parseError) {
+              throw new Error(`Invalid arguments format: ${toolCall.function.arguments}`);
+            }
+            toolOutputContent = await toolToCall.invoke(args);
+            steps.push(`Agent ${currentNode.id} Turn ${turns}: Executed ${toolCall.function.name}. Result: ${JSON.stringify(toolOutputContent).substring(0,100)}...`);
+          } catch (toolError: any) {
+            toolOutputContent = `Error executing tool: ${toolError.message}`;
+            steps.push(`Agent ${currentNode.id} Turn ${turns}: Error executing ${toolCall.function.name}: ${toolError.message}`);
+          }
+        } else {
+          toolOutputContent = `Error: Tool \"${toolCall.function.name}\" not found.`;
+          steps.push(`Agent ${currentNode.id} Turn ${turns}: Tool ${toolCall.function.name} not found.`);
+        }
+        
+        toolMessages.push(new ToolMessage({
+          tool_call_id: toolCall.id!,
+          content: toolOutputContent,
+          name: toolCall.function.name 
+        }));
+      }));
+
+      agentMessages = agentMessages.concat(toolMessages);
+    } else {
+      finalAgentOutput = response.content;
+      steps.push(`Result (Agent ${currentNode.id}): ${typeof finalAgentOutput === 'string' ? finalAgentOutput.substring(0,100)+'...' : JSON.stringify(finalAgentOutput)}`);
+      break;
+    }
+  }
+
+  if (turns >= maxTurns && finalAgentOutput === null) {
+    steps.push(`Warning (Agent ${currentNode.id}): Reached max iterations after tool calls.`);
+    const lastMessage = agentMessages[agentMessages.length - 1];
+    finalAgentOutput = lastMessage?.content ?? `Agent reached max iterations (${maxTurns}).`;
+  }
+
+  const outgoingEdge = state.graphEdges.find(edge => edge.source === currentNode.id);
+  const nextNodeId = outgoingEdge?.target || null;
+
+  return {
+    currentData: finalAgentOutput,
+    steps,
+    currentNodeId: nextNodeId
+  };
 }
 
+async function executeOutput(state: GraphStateType): Promise<Partial<GraphStateType>> {
+  console.log("[LangGraph] Executing output node");
+  
+  const currentNode = state.graphNodes.find(n => n.id === state.currentNodeId);
+  const steps = [...state.steps, `Output: ${typeof state.currentData === 'string' ? state.currentData.substring(0,100)+'...' : JSON.stringify(state.currentData)}`];
+  
+  return {
+    steps,
+    executionComplete: true,
+    currentNodeId: null
+  };
+}
+
+function routeNext(state: GraphStateType): string {
+  if (state.executionComplete || !state.currentNodeId) {
+    return END;
+  }
+
+  const currentNode = state.graphNodes.find(n => n.id === state.currentNodeId);
+  if (!currentNode) {
+    return END;
+  }
+
+  switch (currentNode.type) {
+    case 'llm':
+      return 'llm';
+    case 'agent':
+      return 'agent';
+    case 'customOutput':
+      return 'output';
+    case 'composio':
+      return 'agent';
+    default:
+      return END;
+  }
+}
+
+async function executeGraphWithLangGraph(
+  graphJson: { nodes: any[]; edges: any[] }
+): Promise<{ response: string; steps: string[] }> {
+  console.log("[LangGraph] Starting graph execution");
+
+  const workflow = new StateGraph(GraphState)
+    .addNode('input', executeInput)
+    .addNode('llm', executeLLM)
+    .addNode('agent', executeAgent)
+    .addNode('output', executeOutput)
+    .addEdge(START, 'input')
+    .addConditionalEdges('input', routeNext)
+    .addConditionalEdges('llm', routeNext)
+    .addConditionalEdges('agent', routeNext)
+    .addEdge('output', END);
+
+  const app = workflow.compile();
+
+  const initialState: GraphStateType = {
+    currentData: null,
+    originalQuery: '',
+    graphNodes: graphJson.nodes,
+    graphEdges: graphJson.edges,
+    steps: [],
+    currentNodeId: null,
+    executionComplete: false
+  };
+
+  const result = await app.invoke(initialState);
+  
+  return {
+    response: String(result.currentData),
+    steps: result.steps
+  };
+}
 
 export async function POST(request: NextRequest) {
-    console.log("Received POST request to /api/agent");
-    try {
-        const rawBody = await request.json();
-        console.log("Raw request body:", rawBody);
+  console.log("Received POST request to /api/agent");
+  try {
+    const rawBody = await request.json();
+    console.log("Raw request body:", rawBody);
 
-        const validationResult = AgentRequestBodySchema.safeParse(rawBody);
-        if (!validationResult.success) {
-            console.error("Invalid request body:", validationResult.error.format());
-            return NextResponse.json(
-                { error: "Invalid request body", details: validationResult.error.format() },
-                { status: 400 }
-            );
-      }
-      
-        const { graphJson } = validationResult.data;
-        console.log("Parsed graph JSON:", graphJson);
+    const validationResult = AgentRequestBodySchema.safeParse(rawBody);
+    if (!validationResult.success) {
+      console.error("Invalid request body:", validationResult.error.format());
+      return NextResponse.json(
+        { error: "Invalid request body", details: validationResult.error.format() },
+        { status: 400 }
+      );
+    }
+    
+    const { graphJson } = validationResult.data;
+    console.log("Parsed graph JSON:", graphJson);
 
-        const result = await executeGraphSequentially(graphJson);
+    const result = await executeGraphWithLangGraph(graphJson);
 
-        console.log("Agent execution result:", result);
-        return NextResponse.json(result);
+    console.log("Agent execution result:", result);
+    return NextResponse.json(result);
 
-         } catch (error: any) {
-        console.error("Error running agent:", error);
-        if (error.message.includes("requires an apiKey") || error.message.includes("requires an llmApiKey") || error.message.includes("'customInput' node")) {
-             return NextResponse.json({ error: `Configuration Error: ${error.message}` }, { status: 400 });
-        }
-        if (error.response?.status === 401 || error.message.includes("Incorrect API key")) {
-            return NextResponse.json({ error: `Authentication Error: ${error.message}` }, { status: 401 });
-        }
-        return NextResponse.json({ error: `Internal Server Error: ${error.message}` }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error running agent:", error);
+    if (error.message.includes("requires an apiKey") || error.message.includes("requires an llmApiKey") || error.message.includes("'customInput' node")) {
+      return NextResponse.json({ error: `Configuration Error: ${error.message}` }, { status: 400 });
+    }
+    if (error.response?.status === 401 || error.message.includes("Incorrect API key")) {
+      return NextResponse.json({ error: `Authentication Error: ${error.message}` }, { status: 401 });
+    }
+    return NextResponse.json({ error: `Internal Server Error: ${error.message}` }, { status: 500 });
   }
 } 
