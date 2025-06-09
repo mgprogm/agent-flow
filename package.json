@@ -15,7 +15,7 @@
     "@langchain/community": "^0.3.42",
     "@langchain/core": "^0.3.55",
     "@langchain/google-genai": "^0.2.8",
-    "@langchain/langgraph": "^0.2.72",
+    "@langchain/langgraph": "^0.2.74",
     "@langchain/openai": "^0.5.10",
     "@radix-ui/react-dialog": "^1.1.13",
     "@radix-ui/react-label": "^2.1.6",
